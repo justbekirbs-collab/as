@@ -4,13 +4,6 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App.tsx';
 import './index.css';
 
-Object.defineProperty(window, 'YetAnotherGame', {
-  get: function() {
-    window.location.href = 'https://github.com/justbekirbs-collab/justbekirsgame.git';
-    return "Opening YetAnotherGame...";
-  }
-});
-
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>

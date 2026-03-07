@@ -19,13 +19,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   Info,
-  Star,
-  Trophy,
-  LogIn,
-  UserPlus,
-  LogOut,
-  User,
-  Loader2
+  Star
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -49,12 +43,6 @@ import {
   DEVICE_TEMPLATES,
   OS_VERSIONS
 } from './data';
-import Login from './components/Auth/Login';
-import Signup from './components/Auth/Signup';
-import Leaderboard from './components/Leaderboard/Leaderboard';
-import { auth, db } from './firebase';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { collection, addDoc } from 'firebase/firestore';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -69,22 +57,6 @@ export default function App() {
   
   const [accentColor, setAccentColor] = useState('#00ff88');
   const [device, setDevice] = useState<UserDevice | null>(null);
-  const [user, setUser] = useState<any>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitSuccess, setSubmitSuccess] = useState(false);
-
-  // Check auth status on mount
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      if (currentUser && currentUser.emailVerified) {
-        setUser(currentUser);
-      } else {
-        setUser(null);
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
 
   // Sync device state with URL slug if needed
   useEffect(() => {
@@ -638,36 +610,6 @@ export default function App() {
   const renderResult = () => {
     if (!device || !metrics) return null;
 
-    const handleSubmitScore = async () => {
-      if (!user) {
-        navigate('/login');
-        return;
-      }
-
-      setIsSubmitting(true);
-      try {
-        await addDoc(collection(db, 'leaderboard'), {
-          username: user.displayName || user.email?.split('@')[0] || 'Anonymous',
-          deviceSlug: device.template.slug,
-          cpu: device.cpu.name,
-          gpu: device.gpu.name,
-          ram: device.ram.size,
-          os: device.os.name,
-          overallRating: metrics.totalScore,
-          peakFPS: metrics.fps,
-          batteryLife: metrics.batteryLife,
-          timestamp: new Date().toISOString()
-        });
-        setSubmitSuccess(true);
-        setTimeout(() => navigate('/leaderboard'), 2000);
-      } catch (err) {
-        console.error('Failed to submit score:', err);
-        alert('Failed to submit score. Please try again.');
-      } finally {
-        setIsSubmitting(false);
-      }
-    };
-
     return (
       <div className="max-w-4xl mx-auto px-4 py-12">
         <motion.div 
@@ -730,14 +672,6 @@ export default function App() {
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
-              onClick={handleSubmitScore}
-              disabled={isSubmitting || submitSuccess}
-              className="px-12 py-4 rounded-2xl font-bold bg-yellow-500 text-black hover:scale-105 transition-transform flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : submitSuccess ? <CheckCircle2 className="w-5 h-5" /> : <Trophy className="w-5 h-5" />}
-              {submitSuccess ? 'Submitted!' : 'Submit to Leaderboard'}
-            </button>
-            <button
               onClick={() => navigate('/home')}
               className="px-12 py-4 rounded-2xl font-bold bg-white text-black hover:scale-105 transition-transform"
             >
@@ -779,15 +713,6 @@ export default function App() {
           </Link>
           <div className="flex items-center gap-4 text-[10px] font-mono uppercase tracking-[0.2em]">
             <Link 
-              to="/leaderboard" 
-              className={cn(
-                "transition-colors flex items-center gap-1", 
-                location.pathname === '/leaderboard' ? "text-white" : "text-zinc-600 hover:text-zinc-400"
-              )}
-            >
-              <Trophy className="w-3 h-3" /> Leaderboard
-            </Link>
-            <Link 
               to="/home" 
               className={cn(
                 "transition-colors", 
@@ -796,7 +721,7 @@ export default function App() {
             >
               Selection
             </Link>
-            {location.pathname !== '/home' && !['/login', '/signup', '/leaderboard'].includes(location.pathname) && (
+            {location.pathname !== '/home' && (
               <>
                 <ChevronRight className="w-3 h-3 text-zinc-800" />
                 <span className={cn(
@@ -812,42 +737,6 @@ export default function App() {
                 <ChevronRight className="w-3 h-3 text-zinc-800" />
                 <span className="text-white">Report</span>
               </>
-            )}
-          </div>
-
-          <div className="flex items-center gap-4">
-            {user ? (
-              <div className="flex items-center gap-4">
-                <div className="hidden sm:flex items-center gap-2 text-xs font-bold text-white">
-                  <User className="w-4 h-4 text-zinc-500" />
-                  {user.displayName || user.email}
-                </div>
-                <button
-                  onClick={async () => {
-                    await signOut(auth);
-                    navigate('/home');
-                  }}
-                  className="p-2 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 transition-colors"
-                  title="Logout"
-                >
-                  <LogOut className="w-4 h-4 text-zinc-400" />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Link
-                  to="/login"
-                  className="px-4 py-2 text-xs font-bold text-zinc-400 hover:text-white transition-colors"
-                >
-                  Login
-                </Link>
-                <Link
-                  to="/signup"
-                  className="px-4 py-2 bg-white text-black text-xs font-bold rounded-xl hover:scale-105 transition-transform"
-                >
-                  Sign Up
-                </Link>
-              </div>
             )}
           </div>
         </div>
@@ -867,9 +756,6 @@ export default function App() {
               <Route path="/device/:slug" element={renderCustomization()} />
               <Route path="/test/:slug" element={renderTest()} />
               <Route path="/result/:slug" element={renderResult()} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/signup" element={<Signup />} />
-              <Route path="/leaderboard" element={<Leaderboard />} />
               <Route path="/" element={<Navigate to="/home" replace />} />
             </Routes>
           </motion.div>
