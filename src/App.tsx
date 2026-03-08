@@ -19,13 +19,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   Info,
-  Star,
-  Trophy,
-  LogIn,
-  UserPlus,
-  LogOut,
-  User,
-  Loader2
+  Star
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -49,12 +43,6 @@ import {
   DEVICE_TEMPLATES,
   OS_VERSIONS
 } from './data';
-import Login from './components/Auth/Login';
-import Signup from './components/Auth/Signup';
-import Leaderboard from './components/Leaderboard/Leaderboard';
-import { auth, db } from './firebase';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { collection, addDoc } from 'firebase/firestore';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -69,22 +57,6 @@ export default function App() {
   
   const [accentColor, setAccentColor] = useState('#00ff88');
   const [device, setDevice] = useState<UserDevice | null>(null);
-  const [user, setUser] = useState<any>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitSuccess, setSubmitSuccess] = useState(false);
-
-  // Check auth status on mount
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      if (currentUser && currentUser.emailVerified) {
-        setUser(currentUser);
-      } else {
-        setUser(null);
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
 
   // Sync device state with URL slug if needed
   useEffect(() => {
@@ -126,12 +98,6 @@ export default function App() {
     const storagePerf = device.storage.speed;
     const coreCount = device.cpu.cores;
 
-    // Enhanced realistic metrics
-    const fps = Math.round((cpuPerf * 0.3 + gpuPerf * 0.5 + ramPerf * 0.2) * (1 + coreCount / 100) * 1.2);
-    const loadTime = Math.max(0.5, Number((10 - (storagePerf / 10 + cpuPerf / 20)).toFixed(1)));
-    const batteryLife = Math.round((device.cpu.efficiency * 0.7 + device.ram.performance * 0.1) * 0.2);
-    const graphicsQuality = Math.round(gpuPerf / 10);
-    
     // OS overhead calculation
     const osYear = device.os.releaseYear;
     const getHardwareYear = (id: string) => {
@@ -146,16 +112,46 @@ export default function App() {
       return 2020;
     };
     const hardwareYear = getHardwareYear(device.cpu.id);
-    const osPenalty = Math.max(0, (osYear - hardwareYear) * 0.3);
     
-    const totalScore = Number(((cpuPerf * 0.35 + gpuPerf * 0.35 + ramPerf * 0.2 + storagePerf * 0.1) / 10 - osPenalty).toFixed(1));
+    // Calculate OS impact multiplier
+    // If OS is newer than hardware, performance drops (multiplier < 1)
+    // If OS is older than hardware, performance is slightly better or neutral (multiplier >= 1)
+    const yearDifference = osYear - hardwareYear;
+    let osMultiplier = 1.0;
+    
+    if (yearDifference > 0) {
+      // Newer OS on older hardware: 5% penalty per year difference
+      osMultiplier = Math.max(0.6, 1.0 - (yearDifference * 0.05));
+    } else if (yearDifference < 0) {
+      // Older OS on newer hardware: 2% boost per year difference (up to 10%)
+      osMultiplier = Math.min(1.1, 1.0 + (Math.abs(yearDifference) * 0.02));
+    }
+
+    // Apply OS multiplier to all metrics
+    const fps = Math.round(((cpuPerf * 0.3 + gpuPerf * 0.5 + ramPerf * 0.2) * (1 + coreCount / 100) * 1.2) * osMultiplier);
+    
+    // Load time increases (gets worse) if multiplier is low
+    const baseLoadTime = Math.max(0.5, Number((10 - (storagePerf / 10 + cpuPerf / 20)).toFixed(1)));
+    const loadTime = Number((baseLoadTime / osMultiplier).toFixed(1));
+    
+    // Battery life is affected by OS efficiency
+    const batteryLife = Math.round(((device.cpu.efficiency * 0.7 + device.ram.performance * 0.1) * 0.2) * osMultiplier);
+    
+    const graphicsQuality = Math.round((gpuPerf / 10) * osMultiplier);
+    
+    // Calculate base score out of 100 first, then convert to 10
+    const baseScore = (cpuPerf * 0.35) + (gpuPerf * 0.35) + (ramPerf * 0.20) + (storagePerf * 0.10);
+    
+    // Apply penalty and ensure it stays within 0-10 range with 1 decimal place
+    const rawTotalScore = (baseScore / 10) * osMultiplier;
+    const totalScore = Number(Math.max(1.0, Math.min(rawTotalScore, 10.0)).toFixed(1));
 
     return {
-      fps: Math.min(fps, 240),
-      loadTime,
-      batteryLife: Math.min(batteryLife, 24),
-      graphicsQuality: Math.min(graphicsQuality, 10),
-      totalScore: Math.max(0, Math.min(totalScore, 10))
+      fps: Math.max(10, Math.min(fps, 240)),
+      loadTime: Number(Math.max(0.1, loadTime).toFixed(1)),
+      batteryLife: Math.max(1, Math.min(batteryLife, 36)), // Increased max battery life
+      graphicsQuality: Math.max(1, Math.min(graphicsQuality, 10)),
+      totalScore
     };
   }, [device]);
 
@@ -213,10 +209,10 @@ export default function App() {
         animate={{ opacity: 1, y: 0 }}
         className="text-center mb-12"
       >
-        <h1 className="text-6xl font-black mb-4 bg-clip-text text-transparent bg-gradient-to-b from-white to-zinc-500 tracking-tighter">
+        <h1 className="text-6xl font-black mb-4 text-rgb tracking-tighter">
           JustGame 44
         </h1>
-        <p className="text-zinc-400 text-lg max-w-2xl mx-auto">
+        <p className="text-zinc-400 text-lg max-w-2xl mx-auto text-rgb opacity-80">
           Engineer your perfect Apple machine. From vintage iPods to next-gen Mac Studios, 
           customize every component and benchmark your build.
         </p>
@@ -231,7 +227,7 @@ export default function App() {
             transition={{ delay: idx * 0.1 }}
             whileHover={{ scale: 1.02, y: -5 }}
             onClick={() => handleSelectTemplate(template)}
-            className="group relative bg-zinc-900/50 border border-white/10 rounded-3xl overflow-hidden cursor-pointer hover:border-white/30 transition-all"
+            className="group relative bg-zinc-900/50 border border-white/10 rounded-3xl overflow-hidden cursor-pointer hover:border-white/30 transition-all hover-glow-rgb"
             style={{ boxShadow: `0 0 20px ${accentColor}10` }}
           >
             <div className="aspect-video relative overflow-hidden">
@@ -246,12 +242,12 @@ export default function App() {
             <div className="p-6">
               <div className="flex justify-between items-start mb-2">
                 <h3 className="text-2xl font-bold text-white">{template.name}</h3>
-                <span className="px-3 py-1 bg-white/10 rounded-full text-xs font-medium text-gray-300">
+                <span className="px-3 py-1 bg-rgb text-white rounded-full text-xs font-medium glow-rgb">
                   {template.category}
                 </span>
               </div>
               <p className="text-gray-400 text-sm mb-4">Starting from ${template.basePrice}</p>
-              <div className="flex items-center text-sm font-semibold" style={{ color: accentColor }}>
+              <div className="flex items-center text-sm font-semibold text-rgb">
                 Customize <ChevronRight className="ml-1 w-4 h-4" />
               </div>
             </div>
@@ -270,10 +266,9 @@ export default function App() {
         <div className="lg:col-span-4 space-y-6">
           <motion.div 
             layoutId="device-preview"
-            className="bg-zinc-900/80 border border-white/10 rounded-3xl p-8 sticky top-8"
-            style={{ boxShadow: `0 0 40px ${accentColor}20` }}
+            className="bg-zinc-900/80 border border-white/10 rounded-3xl p-8 sticky top-8 glow-rgb"
           >
-            <div className="relative aspect-square mb-8 rounded-2xl overflow-hidden bg-black flex items-center justify-center group">
+            <div className="relative aspect-square mb-8 rounded-2xl overflow-hidden bg-black flex items-center justify-center group active-glow-rgb">
               <img 
                 src={device.template.image} 
                 alt="Preview" 
@@ -290,20 +285,20 @@ export default function App() {
 
             {/* Component Visuals */}
             <div className="grid grid-cols-4 gap-2 mb-6">
-              <div className="flex flex-col items-center p-2 rounded-xl bg-white/5 border border-white/5" style={{ borderColor: device.cpu.type === 'M-series' ? accentColor : 'transparent' }}>
-                <Cpu className="w-4 h-4 mb-1" style={{ color: device.cpu.type === 'M-series' ? accentColor : '#666' }} />
+              <div className="flex flex-col items-center p-2 rounded-xl bg-white/5 border border-white/5 hover-glow-rgb">
+                <Cpu className="w-4 h-4 mb-1 text-rgb" />
                 <span className="text-[8px] uppercase font-bold text-gray-500">CPU</span>
               </div>
-              <div className="flex flex-col items-center p-2 rounded-xl bg-white/5 border border-white/5" style={{ borderColor: device.gpu.brand === 'Apple' ? accentColor : 'transparent' }}>
-                <Monitor className="w-4 h-4 mb-1" style={{ color: device.gpu.brand === 'Apple' ? accentColor : '#666' }} />
+              <div className="flex flex-col items-center p-2 rounded-xl bg-white/5 border border-white/5 hover-glow-rgb">
+                <Monitor className="w-4 h-4 mb-1 text-rgb" />
                 <span className="text-[8px] uppercase font-bold text-gray-500">GPU</span>
               </div>
-              <div className="flex flex-col items-center p-2 rounded-xl bg-white/5 border border-white/5" style={{ borderColor: device.ram.size >= 32 ? accentColor : 'transparent' }}>
-                <Layers className="w-4 h-4 mb-1" style={{ color: device.ram.size >= 32 ? accentColor : '#666' }} />
+              <div className="flex flex-col items-center p-2 rounded-xl bg-white/5 border border-white/5 hover-glow-rgb">
+                <Layers className="w-4 h-4 mb-1 text-rgb" />
                 <span className="text-[8px] uppercase font-bold text-gray-500">RAM</span>
               </div>
-              <div className="flex flex-col items-center p-2 rounded-xl bg-white/5 border border-white/5" style={{ borderColor: device.storage.size >= 1024 ? accentColor : 'transparent' }}>
-                <HardDrive className="w-4 h-4 mb-1" style={{ color: device.storage.size >= 1024 ? accentColor : '#666' }} />
+              <div className="flex flex-col items-center p-2 rounded-xl bg-white/5 border border-white/5 hover-glow-rgb">
+                <HardDrive className="w-4 h-4 mb-1 text-rgb" />
                 <span className="text-[8px] uppercase font-bold text-gray-500">SSD</span>
               </div>
             </div>
@@ -311,11 +306,11 @@ export default function App() {
             <div className="space-y-4">
               <div className="flex justify-between items-end">
                 <div>
-                  <h2 className="text-3xl font-bold text-white">{device.template.name}</h2>
-                  <p className="text-gray-400">Custom Build</p>
+                  <h2 className="text-3xl font-bold text-white text-rgb">{device.template.name}</h2>
+                  <p className="text-gray-400 text-rgb opacity-80">Custom Build</p>
                 </div>
                 <div className="text-right">
-                  <div className="text-4xl font-black" style={{ color: accentColor }}>
+                  <div className="text-4xl font-black text-rgb">
                     {metrics.totalScore}
                   </div>
                   <div className="text-xs uppercase tracking-widest text-gray-500">Score</div>
@@ -323,38 +318,37 @@ export default function App() {
               </div>
 
               <div className="grid grid-cols-3 gap-4 pt-4 border-t border-white/5">
-                <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                <div className="bg-white/5 p-3 rounded-2xl border border-white/5 hover-glow-rgb">
                   <div className="flex items-center text-gray-400 text-[10px] uppercase tracking-wider mb-1">
-                    <Zap className="w-3 h-3 mr-1" /> FPS
+                    <Zap className="w-3 h-3 mr-1 text-rgb" /> FPS
                   </div>
                   <div className="text-lg font-bold text-white">{metrics.fps}</div>
                 </div>
-                <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                <div className="bg-white/5 p-3 rounded-2xl border border-white/5 hover-glow-rgb">
                   <div className="flex items-center text-gray-400 text-[10px] uppercase tracking-wider mb-1">
-                    <Battery className="w-3 h-3 mr-1" /> Battery
+                    <Battery className="w-3 h-3 mr-1 text-rgb" /> Battery
                   </div>
                   <div className="text-lg font-bold text-white">{metrics.batteryLife}h</div>
                 </div>
-                <div className="bg-white/5 p-3 rounded-2xl border border-white/5" style={{ borderColor: `${accentColor}40` }}>
+                <div className="bg-white/5 p-3 rounded-2xl border border-white/5 active-glow-rgb">
                   <div className="flex items-center text-gray-400 text-[10px] uppercase tracking-wider mb-1">
-                    <Star className="w-3 h-3 mr-1" style={{ color: accentColor }} /> Score
+                    <Star className="w-3 h-3 mr-1 text-rgb" /> Score
                   </div>
-                  <div className="text-lg font-bold" style={{ color: accentColor }}>{metrics.totalScore}/10</div>
+                  <div className="text-lg font-bold text-rgb">{metrics.totalScore}/10</div>
                 </div>
               </div>
             </div>
 
             <button
               onClick={() => navigate(`/test/${device.template.slug}`)}
-              className="w-full mt-8 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
-              style={{ backgroundColor: accentColor, color: '#000' }}
+              className="w-full mt-8 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] bg-rgb text-white shadow-lg"
             >
               <Play className="w-5 h-5 fill-current" /> Run Simulation
             </button>
             
             <button
               onClick={() => navigate('/home')}
-              className="w-full mt-3 py-3 rounded-2xl font-medium text-gray-400 hover:text-white transition-colors"
+              className="w-full mt-3 py-3 rounded-2xl font-medium text-gray-400 hover:text-white transition-colors hover:text-rgb"
             >
               Change Model
             </button>
@@ -364,21 +358,20 @@ export default function App() {
         {/* Right Panel: Options */}
         <div className="lg:col-span-8 space-y-8">
           <section>
-            <div className="flex items-center gap-2 mb-4 text-white font-semibold">
+            <div className="flex items-center gap-2 mb-4 text-white font-semibold text-rgb">
               <Cpu className="w-5 h-5" /> Processor (CPU)
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {CPUS.filter(c => device.template.compatibleCPUTypes.includes(c.type)).map(cpu => (
+              {CPUS.filter(c => device.template.name !== 'MacBook Neo' || device.template.compatibleCPUTypes.includes(c.type)).map(cpu => (
                 <button
                   key={cpu.id}
                   onClick={() => setDevice({ ...device, cpu })}
                   className={cn(
                     "p-4 rounded-2xl border text-left transition-all relative overflow-hidden group",
                     device.cpu.id === cpu.id 
-                      ? "bg-white/10 border-white/40 shadow-[0_0_15px_rgba(255,255,255,0.1)]" 
-                      : "bg-zinc-900/40 border-white/5 hover:border-white/20"
+                      ? "bg-white/10 active-glow-rgb" 
+                      : "bg-zinc-900/40 border-white/5 hover-glow-rgb"
                   )}
-                  style={device.cpu.id === cpu.id ? { boxShadow: `0 0 20px ${accentColor}30` } : {}}
                 >
                   <div className="font-bold text-white">{cpu.name}</div>
                   <div className="text-xs text-gray-500 mt-1">{cpu.type} Architecture</div>
@@ -388,7 +381,7 @@ export default function App() {
           </section>
 
           <section>
-            <div className="flex items-center gap-2 mb-4 text-white font-semibold">
+            <div className="flex items-center gap-2 mb-4 text-white font-semibold text-rgb">
               <Layers className="w-5 h-5" /> Memory (RAM)
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
@@ -399,10 +392,9 @@ export default function App() {
                   className={cn(
                     "p-4 rounded-2xl border text-center transition-all relative overflow-hidden group",
                     device.ram.id === ram.id 
-                      ? "bg-white/10 border-white/40" 
-                      : "bg-zinc-900/40 border-white/5 hover:border-white/20"
+                      ? "bg-white/10 active-glow-rgb" 
+                      : "bg-zinc-900/40 border-white/5 hover-glow-rgb"
                   )}
-                  style={device.ram.id === ram.id ? { boxShadow: `0 0 20px ${accentColor}30` } : {}}
                 >
                   <div className="font-bold text-white">{ram.size}GB</div>
                   <div className="text-[10px] text-gray-500 uppercase">{ram.type}</div>
@@ -412,21 +404,20 @@ export default function App() {
           </section>
 
           <section>
-            <div className="flex items-center gap-2 mb-4 text-white font-semibold">
+            <div className="flex items-center gap-2 mb-4 text-white font-semibold text-rgb">
               <Monitor className="w-5 h-5" /> Graphics (GPU)
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {GPU_OPTIONS.filter(g => device.template.compatibleGPUArchitectures.includes(g.architecture)).map(gpu => (
+              {GPU_OPTIONS.filter(g => device.template.name !== 'MacBook Neo' || device.template.compatibleGPUArchitectures.includes(g.architecture)).map(gpu => (
                 <button
                   key={gpu.id}
                   onClick={() => setDevice({ ...device, gpu })}
                   className={cn(
                     "p-4 rounded-2xl border text-left transition-all relative overflow-hidden group",
                     device.gpu.id === gpu.id 
-                      ? "bg-white/10 border-white/40" 
-                      : "bg-zinc-900/40 border-white/5 hover:border-white/20"
+                      ? "bg-white/10 active-glow-rgb" 
+                      : "bg-zinc-900/40 border-white/5 hover-glow-rgb"
                   )}
-                  style={device.gpu.id === gpu.id ? { boxShadow: `0 0 20px ${accentColor}30` } : {}}
                 >
                   <div className="font-bold text-white">{gpu.name}</div>
                   <div className="text-xs text-gray-500 mt-1">{gpu.type} GPU</div>
@@ -436,7 +427,7 @@ export default function App() {
           </section>
 
           <section>
-            <div className="flex items-center gap-2 mb-4 text-white font-semibold">
+            <div className="flex items-center gap-2 mb-4 text-white font-semibold text-rgb">
               <HardDrive className="w-5 h-5" /> Storage
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -447,10 +438,9 @@ export default function App() {
                   className={cn(
                     "p-4 rounded-2xl border text-center transition-all relative overflow-hidden group",
                     device.storage.id === storage.id 
-                      ? "bg-white/10 border-white/40" 
-                      : "bg-zinc-900/40 border-white/5 hover:border-white/20"
+                      ? "bg-white/10 active-glow-rgb" 
+                      : "bg-zinc-900/40 border-white/5 hover-glow-rgb"
                   )}
-                  style={device.storage.id === storage.id ? { boxShadow: `0 0 20px ${accentColor}30` } : {}}
                 >
                   <div className="font-bold text-white">{storage.size >= 1024 ? `${storage.size / 1024}TB` : `${storage.size}GB`}</div>
                   <div className="text-[10px] text-gray-500 uppercase">{storage.type}</div>
@@ -460,58 +450,25 @@ export default function App() {
           </section>
 
           <section>
-            <div className="flex items-center gap-2 mb-4 text-white font-semibold">
+            <div className="flex items-center gap-2 mb-4 text-white font-semibold text-rgb">
               <Settings className="w-5 h-5" /> Operating System
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {OS_VERSIONS.filter(v => device.template.compatibleOSFamilies.includes(v.family)).map(os => (
+              {OS_VERSIONS.filter(v => device.template.name !== 'MacBook Neo' || device.template.compatibleOSFamilies.includes(v.family)).map(os => (
                 <button
                   key={os.id}
                   onClick={() => setDevice({ ...device, os })}
                   className={cn(
                     "p-4 rounded-2xl border text-left transition-all relative overflow-hidden group",
                     device.os.id === os.id 
-                      ? "bg-white/10 border-white/40" 
-                      : "bg-zinc-900/40 border-white/5 hover:border-white/20"
+                      ? "bg-white/10 active-glow-rgb" 
+                      : "bg-zinc-900/40 border-white/5 hover-glow-rgb"
                   )}
-                  style={device.os.id === os.id ? { boxShadow: `0 0 20px ${accentColor}30` } : {}}
                 >
                   <div className="font-bold text-white">{os.name}</div>
                   <div className="text-[10px] text-gray-500 uppercase">Released {os.releaseYear}</div>
                 </button>
               ))}
-            </div>
-          </section>
-
-          <section className="p-6 bg-zinc-900/40 border border-white/5 rounded-3xl">
-            <div className="flex items-center gap-2 mb-6 text-white font-semibold">
-              <Palette className="w-5 h-5" /> RGB Customization
-            </div>
-            <div className="flex flex-wrap gap-4">
-              {['#00ff88', '#00ccff', '#ff3366', '#ffcc00', '#9933ff', '#ffffff'].map(color => (
-                <button
-                  key={color}
-                  onClick={() => setAccentColor(color)}
-                  className={cn(
-                    "w-12 h-12 rounded-full border-4 transition-all hover:scale-110",
-                    accentColor === color ? "border-white" : "border-transparent"
-                  )}
-                  style={{ backgroundColor: color }}
-                />
-              ))}
-              <div className="flex-1 min-w-[200px]">
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="360" 
-                  className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-white"
-                  onChange={(e) => setAccentColor(`hsl(${e.target.value}, 100%, 50%)`)}
-                />
-                <div className="flex justify-between text-[10px] text-gray-500 mt-2 uppercase tracking-widest">
-                  <span>Hue Spectrum</span>
-                  <span>{accentColor}</span>
-                </div>
-              </div>
             </div>
           </section>
         </div>
@@ -532,7 +489,7 @@ export default function App() {
         <motion.div 
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className="relative w-full max-w-4xl aspect-video bg-zinc-900 rounded-3xl border border-white/10 overflow-hidden shadow-2xl"
+          className="relative w-full max-w-4xl aspect-video bg-zinc-900 rounded-3xl border border-white/10 overflow-hidden shadow-2xl glow-rgb"
         >
           {/* Simulated Game/App View */}
           <div className="absolute inset-0 flex flex-col">
@@ -565,10 +522,9 @@ export default function App() {
                 <motion.div 
                   animate={{ rotate: 360 }}
                   transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                  className="w-24 h-24 border-4 border-t-transparent rounded-full mb-6 mx-auto"
-                  style={{ borderColor: `${accentColor}40`, borderTopColor: accentColor }}
+                  className="w-24 h-24 border-4 border-t-transparent rounded-full mb-6 mx-auto border-rgb"
                 />
-                <h3 className="text-2xl font-bold text-white mb-2">Rendering 3D Scene...</h3>
+                <h3 className="text-2xl font-bold text-white mb-2 text-rgb">Rendering 3D Scene...</h3>
                 <p className="text-gray-500 font-mono">Loading assets: {metrics.loadTime}s estimated</p>
               </div>
 
@@ -576,8 +532,7 @@ export default function App() {
               {[...Array(20)].map((_, i) => (
                 <motion.div
                   key={i}
-                  className="absolute w-1 h-1 rounded-full"
-                  style={{ backgroundColor: accentColor }}
+                  className="absolute w-1 h-1 rounded-full bg-white"
                   animate={{
                     x: [0, (Math.random() - 0.5) * 1000],
                     y: [0, (Math.random() - 0.5) * 600],
@@ -597,15 +552,14 @@ export default function App() {
             <div className="p-6 bg-black/60 border-t border-white/5">
               <div className="flex justify-between items-center mb-4">
                 <span className="text-sm font-bold text-white">System Stability</span>
-                <span className="text-sm font-bold" style={{ color: accentColor }}>Optimal</span>
+                <span className="text-sm font-bold text-rgb">Optimal</span>
               </div>
               <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
                 <motion.div 
                   initial={{ width: 0 }}
                   animate={{ width: '100%' }}
                   transition={{ duration: 5 }}
-                  className="h-full"
-                  style={{ backgroundColor: accentColor }}
+                  className="h-full bg-rgb"
                 />
               </div>
             </div>
@@ -620,13 +574,13 @@ export default function App() {
         >
           <button
             onClick={() => navigate(`/result/${device.template.slug}`)}
-            className="px-8 py-4 bg-white text-black font-bold rounded-2xl hover:scale-105 transition-transform"
+            className="px-8 py-4 bg-rgb text-white font-bold rounded-2xl hover:scale-105 transition-transform glow-rgb"
           >
             View Final Report
           </button>
           <button
             onClick={() => navigate(`/device/${device.template.slug}`)}
-            className="px-8 py-4 bg-zinc-800 text-white font-bold rounded-2xl hover:bg-zinc-700 transition-colors"
+            className="px-8 py-4 bg-zinc-800 text-white font-bold rounded-2xl hover:bg-zinc-700 transition-colors hover-glow-rgb"
           >
             Back to Build
           </button>
@@ -638,65 +592,34 @@ export default function App() {
   const renderResult = () => {
     if (!device || !metrics) return null;
 
-    const handleSubmitScore = async () => {
-      if (!user) {
-        navigate('/login');
-        return;
-      }
-
-      setIsSubmitting(true);
-      try {
-        await addDoc(collection(db, 'leaderboard'), {
-          username: user.displayName || user.email?.split('@')[0] || 'Anonymous',
-          deviceSlug: device.template.slug,
-          cpu: device.cpu.name,
-          gpu: device.gpu.name,
-          ram: device.ram.size,
-          os: device.os.name,
-          overallRating: metrics.totalScore,
-          peakFPS: metrics.fps,
-          batteryLife: metrics.batteryLife,
-          timestamp: new Date().toISOString()
-        });
-        setSubmitSuccess(true);
-        setTimeout(() => navigate('/leaderboard'), 2000);
-      } catch (err) {
-        console.error('Failed to submit score:', err);
-        alert('Failed to submit score. Please try again.');
-      } finally {
-        setIsSubmitting(false);
-      }
-    };
-
     return (
       <div className="max-w-4xl mx-auto px-4 py-12">
         <motion.div 
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="bg-zinc-900/80 border border-white/10 rounded-[40px] p-12 text-center relative overflow-hidden"
-          style={{ boxShadow: `0 0 60px ${accentColor}20` }}
+          className="bg-zinc-900/80 border border-white/10 rounded-[40px] p-12 text-center relative overflow-hidden glow-rgb"
         >
-          <div className="absolute top-0 left-0 w-full h-2" style={{ backgroundColor: accentColor }} />
+          <div className="absolute top-0 left-0 w-full h-2 bg-rgb" />
           
-          <div className="mb-8 inline-flex items-center justify-center p-4 rounded-3xl bg-white/5">
-            <CheckCircle2 className="w-12 h-12" style={{ color: accentColor }} />
+          <div className="mb-8 inline-flex items-center justify-center p-4 rounded-3xl bg-white/5 active-glow-rgb">
+            <CheckCircle2 className="w-12 h-12 text-rgb" />
           </div>
 
-          <h1 className="text-4xl font-black text-white mb-2">Build Certified</h1>
-          <p className="text-gray-400 mb-12">Your custom {device.template.name} is ready for production.</p>
+          <h1 className="text-4xl font-black text-white mb-2 text-rgb">Build Certified</h1>
+          <p className="text-gray-400 mb-12 text-rgb opacity-80">Your custom {device.template.name} is ready for production.</p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-            <div className="p-6 rounded-3xl bg-white/5 border border-white/5">
-              <div className="text-5xl font-black mb-2" style={{ color: accentColor }}>{metrics.totalScore}</div>
-              <div className="text-xs uppercase tracking-widest text-gray-500">Overall Rating</div>
+            <div className="p-6 rounded-3xl bg-white/5 border border-white/5 hover-glow-rgb">
+              <div className="text-5xl font-black mb-2 text-rgb">{metrics.totalScore}</div>
+              <div className="text-xs uppercase tracking-widest text-gray-500 text-rgb">Overall Rating</div>
             </div>
-            <div className="p-6 rounded-3xl bg-white/5 border border-white/5">
-              <div className="text-5xl font-black mb-2 text-white">{metrics.fps}</div>
-              <div className="text-xs uppercase tracking-widest text-gray-500">Peak FPS</div>
+            <div className="p-6 rounded-3xl bg-white/5 border border-white/5 hover-glow-rgb">
+              <div className="text-5xl font-black mb-2 text-white text-rgb">{metrics.fps}</div>
+              <div className="text-xs uppercase tracking-widest text-gray-500 text-rgb">Peak FPS</div>
             </div>
-            <div className="p-6 rounded-3xl bg-white/5 border border-white/5">
-              <div className="text-5xl font-black mb-2 text-white">{metrics.batteryLife}h</div>
-              <div className="text-xs uppercase tracking-widest text-gray-500">Battery Life</div>
+            <div className="p-6 rounded-3xl bg-white/5 border border-white/5 hover-glow-rgb">
+              <div className="text-5xl font-black mb-2 text-white text-rgb">{metrics.batteryLife}h</div>
+              <div className="text-xs uppercase tracking-widest text-gray-500 text-rgb">Battery Life</div>
             </div>
           </div>
 
@@ -730,22 +653,14 @@ export default function App() {
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
-              onClick={handleSubmitScore}
-              disabled={isSubmitting || submitSuccess}
-              className="px-12 py-4 rounded-2xl font-bold bg-yellow-500 text-black hover:scale-105 transition-transform flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : submitSuccess ? <CheckCircle2 className="w-5 h-5" /> : <Trophy className="w-5 h-5" />}
-              {submitSuccess ? 'Submitted!' : 'Submit to Leaderboard'}
-            </button>
-            <button
               onClick={() => navigate('/home')}
-              className="px-12 py-4 rounded-2xl font-bold bg-white text-black hover:scale-105 transition-transform"
+              className="px-12 py-4 rounded-2xl font-bold bg-rgb text-white hover:scale-105 transition-transform glow-rgb"
             >
               Build New Device
             </button>
             <button
               onClick={() => window.print()}
-              className="px-12 py-4 rounded-2xl font-bold bg-zinc-800 text-white hover:bg-zinc-700 transition-colors"
+              className="px-12 py-4 rounded-2xl font-bold bg-zinc-800 text-white hover:bg-zinc-700 transition-colors hover-glow-rgb"
             >
               Export Specs
             </button>
@@ -760,33 +675,22 @@ export default function App() {
       {/* Global Background Glow */}
       <div className="fixed inset-0 pointer-events-none">
         <div 
-          className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full blur-[120px] opacity-20"
-          style={{ backgroundColor: accentColor }}
+          className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full blur-[120px] opacity-20 bg-purple-600 animate-[pulse_8s_ease-in-out_infinite]"
         />
         <div 
-          className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full blur-[120px] opacity-10"
-          style={{ backgroundColor: accentColor }}
+          className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full blur-[120px] opacity-10 bg-blue-600 animate-[pulse_10s_ease-in-out_infinite]"
         />
       </div>
 
       <nav className="border-b border-white/5 bg-black/50 backdrop-blur-xl sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <Link to="/home" className="flex items-center gap-2 font-bold text-white text-xl">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: accentColor }}>
-              <Laptop className="w-5 h-5 text-black" />
+          <Link to="/home" className="flex items-center gap-2 font-bold text-white text-xl text-rgb">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-rgb glow-rgb">
+              <Laptop className="w-5 h-5 text-white" />
             </div>
             JustGame 44
           </Link>
           <div className="flex items-center gap-4 text-[10px] font-mono uppercase tracking-[0.2em]">
-            <Link 
-              to="/leaderboard" 
-              className={cn(
-                "transition-colors flex items-center gap-1", 
-                location.pathname === '/leaderboard' ? "text-white" : "text-zinc-600 hover:text-zinc-400"
-              )}
-            >
-              <Trophy className="w-3 h-3" /> Leaderboard
-            </Link>
             <Link 
               to="/home" 
               className={cn(
@@ -796,7 +700,7 @@ export default function App() {
             >
               Selection
             </Link>
-            {location.pathname !== '/home' && !['/login', '/signup', '/leaderboard'].includes(location.pathname) && (
+            {location.pathname !== '/home' && (
               <>
                 <ChevronRight className="w-3 h-3 text-zinc-800" />
                 <span className={cn(
@@ -812,42 +716,6 @@ export default function App() {
                 <ChevronRight className="w-3 h-3 text-zinc-800" />
                 <span className="text-white">Report</span>
               </>
-            )}
-          </div>
-
-          <div className="flex items-center gap-4">
-            {user ? (
-              <div className="flex items-center gap-4">
-                <div className="hidden sm:flex items-center gap-2 text-xs font-bold text-white">
-                  <User className="w-4 h-4 text-zinc-500" />
-                  {user.displayName || user.email}
-                </div>
-                <button
-                  onClick={async () => {
-                    await signOut(auth);
-                    navigate('/home');
-                  }}
-                  className="p-2 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 transition-colors"
-                  title="Logout"
-                >
-                  <LogOut className="w-4 h-4 text-zinc-400" />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Link
-                  to="/login"
-                  className="px-4 py-2 text-xs font-bold text-zinc-400 hover:text-white transition-colors"
-                >
-                  Login
-                </Link>
-                <Link
-                  to="/signup"
-                  className="px-4 py-2 bg-white text-black text-xs font-bold rounded-xl hover:scale-105 transition-transform"
-                >
-                  Sign Up
-                </Link>
-              </div>
             )}
           </div>
         </div>
@@ -867,9 +735,6 @@ export default function App() {
               <Route path="/device/:slug" element={renderCustomization()} />
               <Route path="/test/:slug" element={renderTest()} />
               <Route path="/result/:slug" element={renderResult()} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/signup" element={<Signup />} />
-              <Route path="/leaderboard" element={<Leaderboard />} />
               <Route path="/" element={<Navigate to="/home" replace />} />
             </Routes>
           </motion.div>

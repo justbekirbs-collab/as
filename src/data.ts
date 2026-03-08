@@ -285,7 +285,7 @@ export const DEVICE_TEMPLATES: DeviceTemplate[] = [
     compatibleCPUTypes: ['A-series'],
     compatibleGPUArchitectures: ['A-series'],
     basePrice: 129,
-    image: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6u-H-67E9v6e6f6f6f6f6f6f6f6f6f6f6f6f&s',
+    image: 'https://store.storeimages.cdn-apple.com/1/as-images.apple.com/is/apple-tv-og-202210?wid=1200&hei=630&fmt=jpeg&qlt=90&.v=1664384900290',
     description: 'The best of TV. And the best of Apple.'
   }
 ];
