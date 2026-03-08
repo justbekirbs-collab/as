@@ -16,9 +16,12 @@ export const OS_VERSIONS: OSVersion[] = [
   { id: 'ipados-16', name: 'iPadOS 16', family: 'iPadOS', releaseYear: 2022 },
   { id: 'ipados-15', name: 'iPadOS 15', family: 'iPadOS', releaseYear: 2021 },
   { id: 'ipados-14', name: 'iPadOS 14', family: 'iPadOS', releaseYear: 2020 },
-  { id: 'ipodos-15', name: 'iPod touch OS 15', family: 'iPod OS', releaseYear: 2021 },
-  { id: 'ipodos-classic-2', name: 'iPod Classic OS 2.0', family: 'iPod OS', releaseYear: 2008 },
-  { id: 'ipodos-classic-1', name: 'iPod Classic OS 1.1', family: 'iPod OS', releaseYear: 2007 },
+  { id: 'ipodos-15', name: 'iPod touch OS 15', family: 'iPodOS', releaseYear: 2021 },
+  { id: 'ipodos-classic-2', name: 'iPod Classic OS 2.0', family: 'iPodOS', releaseYear: 2008 },
+  { id: 'ipodos-classic-1', name: 'iPod Classic OS 1.1', family: 'iPodOS', releaseYear: 2007 },
+  { id: 'tvos-18', name: 'tvOS 18', family: 'tvOS', releaseYear: 2024 },
+  { id: 'tvos-17', name: 'tvOS 17', family: 'tvOS', releaseYear: 2023 },
+  { id: 'tvos-16', name: 'tvOS 16', family: 'tvOS', releaseYear: 2022 },
 ];
 
 export const CPUS: CPU[] = [
@@ -251,8 +254,8 @@ export const DEVICE_TEMPLATES: DeviceTemplate[] = [
     slug: 'ipod-touch-7th-gen',
     category: 'iPod',
     name: 'iPod Touch (7th Gen)',
-    defaultOSFamily: 'iPod OS',
-    compatibleOSFamilies: ['iPod OS', 'iOS'],
+    defaultOSFamily: 'iPodOS',
+    compatibleOSFamilies: ['iPodOS', 'iOS'],
     compatibleCPUTypes: ['A-series'],
     compatibleGPUArchitectures: ['A-series'],
     basePrice: 199,
@@ -263,12 +266,26 @@ export const DEVICE_TEMPLATES: DeviceTemplate[] = [
     slug: 'ipod-classic',
     category: 'iPod',
     name: 'iPod Classic',
-    defaultOSFamily: 'iPod OS',
-    compatibleOSFamilies: ['iPod OS'],
+    defaultOSFamily: 'iPodOS',
+    compatibleOSFamilies: ['iPodOS'],
     compatibleCPUTypes: ['A-series'],
     compatibleGPUArchitectures: ['A-series'],
     basePrice: 249,
     image: 'https://cdsassets.apple.com/live/7WUAS350/images/ipod/ipod-classic/ipod-6th-classic-gen.png',
     description: '1,000 songs in your pocket.'
+  },
+  
+  // Apple TV
+  {
+    slug: 'apple-tv-4k',
+    category: 'Apple TV',
+    name: 'Apple TV 4K (3rd Gen)',
+    defaultOSFamily: 'tvOS',
+    compatibleOSFamilies: ['tvOS'],
+    compatibleCPUTypes: ['A-series'],
+    compatibleGPUArchitectures: ['A-series'],
+    basePrice: 129,
+    image: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6u-H-67E9v6e6f6f6f6f6f6f6f6f6f6f6f6f&s',
+    description: 'The best of TV. And the best of Apple.'
   }
 ];

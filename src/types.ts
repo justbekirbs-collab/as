@@ -1,6 +1,6 @@
-export type DeviceCategory = 'MacBook' | 'iMac' | 'Mac mini' | 'Mac Studio' | 'Mac Pro' | 'iPhone' | 'iPad' | 'iPod';
+export type DeviceCategory = 'MacBook' | 'iMac' | 'Mac mini' | 'Mac Studio' | 'Mac Pro' | 'iPhone' | 'iPad' | 'iPod' | 'Apple TV';
 
-export type OSFamily = 'macOS' | 'iOS' | 'iPadOS' | 'iPod OS';
+export type OSFamily = 'macOS' | 'iOS' | 'iPadOS' | 'iPodOS' | 'tvOS';
 
 export interface OSVersion {
   id: string;
