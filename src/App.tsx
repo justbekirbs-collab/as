@@ -532,7 +532,7 @@ export default function App() {
               {[...Array(20)].map((_, i) => (
                 <motion.div
                   key={i}
-                  className="absolute w-1 h-1 rounded-full bg-white"
+                  className="absolute w-1 h-1 rounded-full bg-rgb glow-rgb"
                   animate={{
                     x: [0, (Math.random() - 0.5) * 1000],
                     y: [0, (Math.random() - 0.5) * 600],
@@ -675,10 +675,10 @@ export default function App() {
       {/* Global Background Glow */}
       <div className="fixed inset-0 pointer-events-none">
         <div 
-          className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full blur-[120px] opacity-20 bg-purple-600 animate-[pulse_8s_ease-in-out_infinite]"
+          className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full blur-[120px] opacity-20 bg-rgb"
         />
         <div 
-          className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full blur-[120px] opacity-10 bg-blue-600 animate-[pulse_10s_ease-in-out_infinite]"
+          className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full blur-[120px] opacity-10 bg-rgb"
         />
       </div>
 
