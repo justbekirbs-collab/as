@@ -1,5 +1,5 @@
 {
   "name": "JustGame 44",
-  "description": "An interactive simulation game to build and test custom Apple devices with realistic performance metrics and RGB effects.",
+  "description": "An interactive simulation game to build and test custom Apple devices with realistic performance metrics, RGB effects, and a global leaderboard with authentication.",
   "requestFramePermissions": []
 }
