@@ -1,1 +1,769 @@
-import React, { useState, useMemo, useEffect } from 'react'; import { motion, AnimatePresence } from 'motion/react'; import { Routes, Route, Navigate, useNavigate, useParams, useLocation, Link } from 'react-router-dom'; import { Laptop, Smartphone, Tablet, Monitor, HardDrive, Cpu, Settings, Play, ChevronRight, ChevronLeft, Zap, Battery, Layers, Palette, CheckCircle2, AlertTriangle, Info, Star } from 'lucide-react'; import { clsx, type ClassValue } from 'clsx'; import { twMerge } from 'tailwind-merge'; import { DeviceCategory, OSFamily, OSVersion, CPU, RAM, GPU, Storage, DeviceTemplate, UserDevice, PerformanceMetrics } from './types'; import { CPUS, RAM_OPTIONS, GPU_OPTIONS, STORAGE_OPTIONS, DEVICE_TEMPLATES, OS_VERSIONS } from './data'; function cn(...inputs: ClassValue[]) { return twMerge(clsx(inputs)); } type View = 'selection' | 'customization' | 'test' | 'result'; export default function App() { const navigate = useNavigate(); const { slug } = useParams(); const location = useLocation(); const [accentColor, setAccentColor] = useState('#00ff88'); const [device, setDevice] = useState<UserDevice | null>(null); const [showEasterEgg, setShowEasterEgg] = useState(false); // Easter egg listener useEffect(() => { let keys = ''; const handleKeyDown = (e: KeyboardEvent) => { keys += e.key.toLowerCase(); if (keys.length > 20) keys = keys.slice(-20); if (keys.includes('yetanothergame')) { setShowEasterEgg(true); keys = ''; } }; window.addEventListener('keydown', handleKeyDown); // Also override console.log to catch"yet another game" const originalLog = console.log; console.log = function(...args) { if (args[0] === 'yet another game' || args.join(' ') === 'yet another game') { setShowEasterEgg(true); } originalLog.apply(console, args); }; // Global function just in case (window as any).yetAnotherGame = () => setShowEasterEgg(true); return () => { window.removeEventListener('keydown', handleKeyDown); console.log = originalLog; delete (window as any).yetAnotherGame; }; }, []); // Sync device state with URL slug if needed useEffect(() => { const pathParts = location.pathname.split('/'); const currentSlug = pathParts[2]; // /device/:slug or /test/:slug or /result/:slug if (currentSlug && (!device || device.template.slug !== currentSlug)) { const template = DEVICE_TEMPLATES.find(t => t.slug === currentSlug); if (template) { // Initialize with defaults if navigating directly const defaultCPU = CPUS.find(c => template.compatibleCPUTypes.includes(c.type)) || CPUS[0]; const defaultOS = OS_VERSIONS.find(v => v.family === template.defaultOSFamily) || OS_VERSIONS[0]; const defaultGPU = GPU_OPTIONS.find(g => template.compatibleGPUArchitectures.includes(g.architecture) && (g.id.includes(defaultCPU.id.split('-')[0]) || g.brand === 'Apple') ) || GPU_OPTIONS.find(g => template.compatibleGPUArchitectures.includes(g.architecture)) || GPU_OPTIONS[0]; setDevice({ template, cpu: defaultCPU, ram: RAM_OPTIONS[1], // 16GB gpu: defaultGPU, storage: STORAGE_OPTIONS[1], // 512GB os: defaultOS, screenSize: '14"', accentColor: accentColor }); } } }, [location.pathname, device, accentColor]); // Performance calculation logic const metrics = useMemo((): PerformanceMetrics | null => { if (!device) return null; const cpuPerf = device.cpu.performance; const ramPerf = device.ram.performance; const gpuPerf = device.gpu.performance; const storagePerf = device.storage.speed; const coreCount = device.cpu.cores; // OS overhead calculation const osYear = device.os.releaseYear; const getHardwareYear = (id: string) => { if (id.includes('m5')) return 2025; if (id.includes('m4') || id.includes('a18')) return 2024; if (id.includes('m3') || id.includes('a17')) return 2023; if (id.includes('m2') || id.includes('a16')) return 2022; if (id.includes('m1') || id.includes('a15') || id.includes('a14')) return 2021; if (id.includes('a13')) return 2019; if (id.includes('a12')) return 2018; if (id.includes('a11')) return 2017; return 2020; }; const hardwareYear = getHardwareYear(device.cpu.id); // Calculate OS impact multiplier // If OS is newer than hardware, performance drops (multiplier < 1) // If OS is older than hardware, performance is slightly better or neutral (multiplier >= 1) const yearDifference = osYear - hardwareYear; let osMultiplier = 1.0; if (yearDifference > 0) { // Newer OS on older hardware: 5% penalty per year difference osMultiplier = Math.max(0.6, 1.0 - (yearDifference * 0.05)); } else if (yearDifference < 0) { // Older OS on newer hardware: 2% boost per year difference (up to 10%) osMultiplier = Math.min(1.1, 1.0 + (Math.abs(yearDifference) * 0.02)); } // Apply OS multiplier to all metrics const fps = Math.round(((cpuPerf * 0.3 + gpuPerf * 0.5 + ramPerf * 0.2) * (1 + coreCount / 100) * 1.2) * osMultiplier); // Load time increases (gets worse) if multiplier is low const baseLoadTime = Math.max(0.5, Number((10 - (storagePerf / 10 + cpuPerf / 20)).toFixed(1))); const loadTime = Number((baseLoadTime / osMultiplier).toFixed(1)); // Battery life is affected by OS efficiency const batteryLife = Math.round(((device.cpu.efficiency * 0.7 + device.ram.performance * 0.1) * 0.2) * osMultiplier); const graphicsQuality = Math.round((gpuPerf / 10) * osMultiplier); // Calculate base score out of 100 first, then convert to 10 const baseScore = (cpuPerf * 0.35) + (gpuPerf * 0.35) + (ramPerf * 0.20) + (storagePerf * 0.10); // Apply penalty and ensure it stays within 0-10 range with 1 decimal place const rawTotalScore = (baseScore / 10) * osMultiplier; const totalScore = Number(Math.max(1.0, Math.min(rawTotalScore, 10.0)).toFixed(1)); return { fps: Math.max(10, Math.min(fps, 240)), loadTime: Number(Math.max(0.1, loadTime).toFixed(1)), batteryLife: Math.max(1, Math.min(batteryLife, 36)), // Increased max battery life graphicsQuality: Math.max(1, Math.min(graphicsQuality, 10)), totalScore }; }, [device]); // Dynamic Page Title useEffect(() => { let title ="JustGame 44"; if (location.pathname === '/home') { title ="Select Device | JustGame 44"; } else if (location.pathname.startsWith('/device/')) { title = `Build ${device?.template.name || 'Device'} | JustGame 44`; } else if (location.pathname.startsWith('/test/')) { title = `Testing ${device?.template.name || 'Device'} | JustGame 44`; } else if (location.pathname.startsWith('/result/')) { title = `Report: ${device?.template.name || 'Device'} | JustGame 44`; } document.title = title; }, [location.pathname, device]); useEffect(() => { if (location.pathname.startsWith('/test/')) { const timer = setTimeout(() => { const currentSlug = location.pathname.split('/')[2]; navigate(`/result/${currentSlug}`); }, 5000); return () => clearTimeout(timer); } }, [location.pathname, navigate]); const handleSelectTemplate = (template: DeviceTemplate) => { // Initialize with defaults const defaultCPU = CPUS.find(c => template.compatibleCPUTypes.includes(c.type)) || CPUS[0]; const defaultOS = OS_VERSIONS.find(v => v.family === template.defaultOSFamily) || OS_VERSIONS[0]; const defaultGPU = GPU_OPTIONS.find(g => template.compatibleGPUArchitectures.includes(g.architecture) && (g.id.includes(defaultCPU.id.split('-')[0]) || g.brand === 'Apple') ) || GPU_OPTIONS.find(g => template.compatibleGPUArchitectures.includes(g.architecture)) || GPU_OPTIONS[0]; setDevice({ template, cpu: defaultCPU, ram: RAM_OPTIONS[1], // 16GB gpu: defaultGPU, storage: STORAGE_OPTIONS[1], // 512GB os: defaultOS, screenSize: '14"', accentColor: accentColor }); navigate(`/device/${template.slug}`); }; const renderSelection = () => ( <div className="max-w-6xl mx-auto px-4 py-12"> <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-12" > <h1 className="text-6xl font-black mb-4 tracking-tighter"> JustGame 44 </h1> <p className="text-zinc-400 text-lg max-w-2xl mx-auto opacity-80"> Engineer your perfect Apple machine. From vintage iPods to next-gen Mac Studios, customize every component and benchmark your build. </p> </motion.div> <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"> {DEVICE_TEMPLATES.map((template, idx) => ( <motion.div key={template.name} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: idx * 0.1 }} whileHover={{ scale: 1.02, y: -5 }} onClick={() => handleSelectTemplate(template)} className="group relative bg-zinc-900/50 border border-white/10 rounded-3xl overflow-hidden cursor-pointer hover:border-white/30 transition-all" style={{ boxShadow: `0 0 20px ${accentColor}10` }} > <div className="aspect-video relative overflow-hidden"> <img src={template.image} alt={template.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" /> <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 to-transparent" /> </div> <div className="p-6"> <div className="flex justify-between items-start mb-2"> <h3 className="text-2xl font-bold text-white">{template.name}</h3> <span className="px-3 py-1 text-white rounded-full text-xs font-medium"> {template.category} </span> </div> <p className="text-gray-400 text-sm mb-4">Starting from ${template.basePrice}</p> <div className="flex items-center text-sm font-semibold"> Customize <ChevronRight className="ml-1 w-4 h-4" /> </div> </div> </motion.div> ))} </div> </div> ); const renderCustomization = () => { if (!device || !metrics) return null; return ( <div className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8"> {/* Left Panel: Preview & Stats */} <div className="lg:col-span-4 space-y-6"> <motion.div layoutId="device-preview" className="bg-zinc-900/80 border border-white/10 rounded-3xl p-8 sticky top-8" > <div className="relative aspect-square mb-8 rounded-2xl overflow-hidden bg-black flex items-center justify-center group"> <img src={device.template.image} alt="Preview" className="w-full h-full object-contain p-4 transition-transform duration-700 group-hover:scale-110" referrerPolicy="no-referrer" /> <div className="absolute inset-0 pointer-events-none opacity-30 mix-blend-screen" style={{ background: `radial-gradient(circle at center, ${accentColor}60 0%, transparent 70%)` }} /> {/* RGB Border Glow */} <div className="absolute inset-0 border-2 border-white/5 rounded-2xl group-hover:border-white/20 transition-colors" /> </div> {/* Component Visuals */} <div className="grid grid-cols-4 gap-2 mb-6"> <div className="flex flex-col items-center p-2 rounded-xl bg-white/5 border border-white/5"> <Cpu className="w-4 h-4 mb-1" /> <span className="text-[8px] uppercase font-bold text-gray-500">CPU</span> </div> <div className="flex flex-col items-center p-2 rounded-xl bg-white/5 border border-white/5"> <Monitor className="w-4 h-4 mb-1" /> <span className="text-[8px] uppercase font-bold text-gray-500">GPU</span> </div> <div className="flex flex-col items-center p-2 rounded-xl bg-white/5 border border-white/5"> <Layers className="w-4 h-4 mb-1" /> <span className="text-[8px] uppercase font-bold text-gray-500">RAM</span> </div> <div className="flex flex-col items-center p-2 rounded-xl bg-white/5 border border-white/5"> <HardDrive className="w-4 h-4 mb-1" /> <span className="text-[8px] uppercase font-bold text-gray-500">SSD</span> </div> </div> <div className="space-y-4"> <div className="flex justify-between items-end"> <div> <h2 className="text-3xl font-bold text-white">{device.template.name}</h2> <p className="text-gray-400 opacity-80">Custom Build</p> </div> <div className="text-right"> <div className="text-4xl font-black"> {metrics.totalScore} </div> <div className="text-xs uppercase tracking-widest text-gray-500">Score</div> </div> </div> <div className="grid grid-cols-3 gap-4 pt-4 border-t border-white/5"> <div className="bg-white/5 p-3 rounded-2xl border border-white/5"> <div className="flex items-center text-gray-400 text-[10px] uppercase tracking-wider mb-1"> <Zap className="w-3 h-3 mr-1" /> FPS </div> <div className="text-lg font-bold text-white">{metrics.fps}</div> </div> <div className="bg-white/5 p-3 rounded-2xl border border-white/5"> <div className="flex items-center text-gray-400 text-[10px] uppercase tracking-wider mb-1"> <Battery className="w-3 h-3 mr-1" /> Battery </div> <div className="text-lg font-bold text-white">{metrics.batteryLife}h</div> </div> <div className="bg-white/5 p-3 rounded-2xl border border-white/5"> <div className="flex items-center text-gray-400 text-[10px] uppercase tracking-wider mb-1"> <Star className="w-3 h-3 mr-1" /> Score </div> <div className="text-lg font-bold">{metrics.totalScore}/10</div> </div> </div> </div> <button onClick={() => navigate(`/test/${device.template.slug}`)} className="w-full mt-8 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] text-white shadow-lg" > <Play className="w-5 h-5 fill-current" /> Run Simulation </button> <button onClick={() => navigate('/home')} className="w-full mt-3 py-3 rounded-2xl font-medium text-gray-400 hover:text-white transition-colors hover:" > Change Model </button> </motion.div> </div> {/* Right Panel: Options */} <div className="lg:col-span-8 space-y-8"> <section> <div className="flex items-center gap-2 mb-4 text-white font-semibold"> <Cpu className="w-5 h-5" /> Processor (CPU) </div> <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"> {CPUS.filter(c => device.template.name !== 'MacBook Neo' || device.template.compatibleCPUTypes.includes(c.type)).map(cpu => ( <button key={cpu.id} onClick={() => setDevice({ ...device, cpu })} className={cn("p-4 rounded-2xl border text-left transition-all relative overflow-hidden group", device.cpu.id === cpu.id ?"bg-white/10" :"bg-zinc-900/40 border-white/5" )} > <div className="font-bold text-white">{cpu.name}</div> <div className="text-xs text-gray-500 mt-1">{cpu.type} Architecture</div> </button> ))} </div> </section> <section> <div className="flex items-center gap-2 mb-4 text-white font-semibold"> <Layers className="w-5 h-5" /> Memory (RAM) </div> <div className="grid grid-cols-2 sm:grid-cols-5 gap-3"> {RAM_OPTIONS.map(ram => ( <button key={ram.id} onClick={() => setDevice({ ...device, ram })} className={cn("p-4 rounded-2xl border text-center transition-all relative overflow-hidden group", device.ram.id === ram.id ?"bg-white/10" :"bg-zinc-900/40 border-white/5" )} > <div className="font-bold text-white">{ram.size}GB</div> <div className="text-[10px] text-gray-500 uppercase">{ram.type}</div> </button> ))} </div> </section> <section> <div className="flex items-center gap-2 mb-4 text-white font-semibold"> <Monitor className="w-5 h-5" /> Graphics (GPU) </div> <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"> {GPU_OPTIONS.filter(g => device.template.name !== 'MacBook Neo' || device.template.compatibleGPUArchitectures.includes(g.architecture)).map(gpu => ( <button key={gpu.id} onClick={() => setDevice({ ...device, gpu })} className={cn("p-4 rounded-2xl border text-left transition-all relative overflow-hidden group", device.gpu.id === gpu.id ?"bg-white/10" :"bg-zinc-900/40 border-white/5" )} > <div className="font-bold text-white">{gpu.name}</div> <div className="text-xs text-gray-500 mt-1">{gpu.type} GPU</div> </button> ))} </div> </section> <section> <div className="flex items-center gap-2 mb-4 text-white font-semibold"> <HardDrive className="w-5 h-5" /> Storage </div> <div className="grid grid-cols-2 sm:grid-cols-4 gap-3"> {STORAGE_OPTIONS.map(storage => ( <button key={storage.id} onClick={() => setDevice({ ...device, storage })} className={cn("p-4 rounded-2xl border text-center transition-all relative overflow-hidden group", device.storage.id === storage.id ?"bg-white/10" :"bg-zinc-900/40 border-white/5" )} > <div className="font-bold text-white">{storage.size >= 1024 ? `${storage.size / 1024}TB` : `${storage.size}GB`}</div> <div className="text-[10px] text-gray-500 uppercase">{storage.type}</div> </button> ))} </div> </section> <section> <div className="flex items-center gap-2 mb-4 text-white font-semibold"> <Settings className="w-5 h-5" /> Operating System </div> <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"> {OS_VERSIONS.filter(v => device.template.name !== 'MacBook Neo' || device.template.compatibleOSFamilies.includes(v.family)).map(os => ( <button key={os.id} onClick={() => setDevice({ ...device, os })} className={cn("p-4 rounded-2xl border text-left transition-all relative overflow-hidden group", device.os.id === os.id ?"bg-white/10" :"bg-zinc-900/40 border-white/5" )} > <div className="font-bold text-white">{os.name}</div> <div className="text-[10px] text-gray-500 uppercase">Released {os.releaseYear}</div> </button> ))} </div> </section> </div> </div> ); }; const renderTest = () => { if (!device || !metrics) return null; return ( <div className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center p-8 overflow-hidden"> <div className="absolute inset-0 opacity-20" style={{ backgroundImage: `radial-gradient(circle at center, ${accentColor} 0%, transparent 70%)`, animation: 'pulse 4s infinite' }} /> <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="relative w-full max-w-4xl aspect-video bg-zinc-900 rounded-3xl border border-white/10 overflow-hidden shadow-2xl" > {/* Simulated Game/App View */} <div className="absolute inset-0 flex flex-col"> <div className="p-4 border-b border-white/5 flex justify-between items-center bg-black/40 backdrop-blur-md"> <div className="flex items-center gap-3"> <div className="w-3 h-3 rounded-full bg-red-500" /> <div className="w-3 h-3 rounded-full bg-yellow-500" /> <div className="w-3 h-3 rounded-full bg-green-500" /> <span className="ml-4 text-sm font-mono text-gray-400">Benchmarking: {device.template.name}</span> </div> <div className="flex gap-6 text-xs font-mono"> <div className="flex flex-col items-end"> <span className="text-gray-500 uppercase">FPS</span> <span className="text-white font-bold">{metrics.fps}</span> </div> <div className="flex flex-col items-end"> <span className="text-gray-500 uppercase">Temp</span> <span className="text-white font-bold">42°C</span> </div> <div className="flex flex-col items-end"> <span className="text-gray-500 uppercase">Usage</span> <span className="text-white font-bold">88%</span> </div> </div> </div> <div className="flex-1 relative flex items-center justify-center"> {/* Simulated visual test */} <div className="text-center"> <motion.div animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity, ease:"linear" }} className="w-24 h-24 border-4 border-t-transparent rounded-full mb-6 mx-auto" /> <h3 className="text-2xl font-bold text-white mb-2">Rendering 3D Scene...</h3> <p className="text-gray-500 font-mono">Loading assets: {metrics.loadTime}s estimated</p> </div> {/* Particle effects based on performance */} {[...Array(20)].map((_, i) => ( <motion.div key={i} className="absolute w-1 h-1 rounded-full" animate={{ x: [0, (Math.random() - 0.5) * 1000], y: [0, (Math.random() - 0.5) * 600], opacity: [1, 0], scale: [1, 0] }} transition={{ duration: 2, repeat: Infinity, delay: Math.random() * 2, ease:"easeOut" }} /> ))} </div> <div className="p-6 bg-black/60 border-t border-white/5"> <div className="flex justify-between items-center mb-4"> <span className="text-sm font-bold text-white">System Stability</span> <span className="text-sm font-bold">Optimal</span> </div> <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden"> <motion.div initial={{ width: 0 }} animate={{ width: '100%' }} transition={{ duration: 5 }} className="h-full" /> </div> </div> </div> </motion.div> <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 1 }} className="mt-12 flex gap-4" > <button onClick={() => navigate(`/result/${device.template.slug}`)} className="px-8 py-4 text-white font-bold rounded-2xl hover:scale-105 transition-transform" > View Final Report </button> <button onClick={() => navigate(`/device/${device.template.slug}`)} className="px-8 py-4 bg-zinc-800 text-white font-bold rounded-2xl hover:bg-zinc-700 transition-colors" > Back to Build </button> </motion.div> </div> ); }; const renderResult = () => { if (!device || !metrics) return null; return ( <div className="max-w-4xl mx-auto px-4 py-12"> <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-zinc-900/80 border border-white/10 rounded-[40px] p-12 text-center relative overflow-hidden" > <div className="absolute top-0 left-0 w-full h-2" /> <div className="mb-8 inline-flex items-center justify-center p-4 rounded-3xl bg-white/5"> <CheckCircle2 className="w-12 h-12" /> </div> <h1 className="text-4xl font-black text-white mb-2">Build Certified</h1> <p className="text-gray-400 mb-12 opacity-80">Your custom {device.template.name} is ready for production.</p> <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12"> <div className="p-6 rounded-3xl bg-white/5 border border-white/5"> <div className="text-5xl font-black mb-2">{metrics.totalScore}</div> <div className="text-xs uppercase tracking-widest text-gray-500">Overall Rating</div> </div> <div className="p-6 rounded-3xl bg-white/5 border border-white/5"> <div className="text-5xl font-black mb-2 text-white">{metrics.fps}</div> <div className="text-xs uppercase tracking-widest text-gray-500">Peak FPS</div> </div> <div className="p-6 rounded-3xl bg-white/5 border border-white/5"> <div className="text-5xl font-black mb-2 text-white">{metrics.batteryLife}h</div> <div className="text-xs uppercase tracking-widest text-gray-500">Battery Life</div> </div> </div> <div className="space-y-4 text-left mb-12"> <h3 className="text-white font-bold mb-4 flex items-center gap-2"> <Info className="w-4 h-4" /> AI Optimization Suggestions </h3> {Math.abs(device.cpu.performance - device.gpu.performance) > 25 && metrics.totalScore < 9.5 && ( <div className="p-4 rounded-2xl bg-yellow-500/10 border border-yellow-500/20 flex gap-3"> <AlertTriangle className="w-5 h-5 text-yellow-500 shrink-0" /> <p className="text-sm text-yellow-200/80"> Hardware Bottleneck: The {device.cpu.performance > device.gpu.performance ? 'GPU' : 'CPU'} is significantly slower than the {device.cpu.performance > device.gpu.performance ? 'CPU' : 'GPU'}, which may limit peak performance in demanding tasks. </p> </div> )} {device.storage.type === 'HDD' && ( <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex gap-3"> <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" /> <p className="text-sm text-red-200/80"> HDD storage is a major bottleneck. Switching to an SSD will improve load times by up to 400%. </p> </div> )} <div className="p-4 rounded-2xl bg-green-500/10 border border-green-500/20 flex gap-3"> <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" /> <p className="text-sm text-green-200/80"> The {device.os.name} integration is perfectly optimized for your hardware choice. </p> </div> </div> <div className="flex flex-col sm:flex-row gap-4 justify-center"> <button onClick={() => navigate('/home')} className="px-12 py-4 rounded-2xl font-bold text-white hover:scale-105 transition-transform" > Build New Device </button> <button onClick={() => window.print()} className="px-12 py-4 rounded-2xl font-bold bg-zinc-800 text-white hover:bg-zinc-700 transition-colors" > Export Specs </button> </div> </motion.div> </div> ); }; return ( <div className="min-h-screen bg-black text-zinc-300 font-sans selection:bg-white selection:text-black"> {/* Global Background Glow */} <div className="fixed inset-0 pointer-events-none"> <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full blur-[120px] opacity-20" /> <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full blur-[120px] opacity-10" /> </div> <nav className="border-b border-white/5 bg-black/50 backdrop-blur-xl sticky top-0 z-40"> <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between"> <Link to="/home" className="flex items-center gap-2 font-bold text-white text-xl"> <div className="w-8 h-8 rounded-lg flex items-center justify-center"> <Laptop className="w-5 h-5 text-white" /> </div> JustGame 44 </Link> <div className="flex items-center gap-4 text-[10px] font-mono uppercase tracking-[0.2em]"> <Link to="/home" className={cn("transition-colors", location.pathname === '/home' ?"text-white" :"text-zinc-600 hover:text-zinc-400" )} > Selection </Link> {location.pathname !== '/home' && ( <> <ChevronRight className="w-3 h-3 text-zinc-800" /> <span className={cn("transition-colors", location.pathname.startsWith('/device') ?"text-white" :"text-zinc-600" )}> {device?.template.name || 'Build'} </span> </> )} {location.pathname.startsWith('/result') && ( <> <ChevronRight className="w-3 h-3 text-zinc-800" /> <span className="text-white">Report</span> </> )} </div> </div> </nav> <main className="relative z-10"> <AnimatePresence mode="wait"> <motion.div key={location.pathname} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} > <Routes location={location}> <Route path="/home" element={renderSelection()} /> <Route path="/device/:slug" element={renderCustomization()} /> <Route path="/test/:slug" element={renderTest()} /> <Route path="/result/:slug" element={renderResult()} /> <Route path="/" element={<Navigate to="/home" replace />} /> </Routes> </motion.div> </AnimatePresence> </main> <footer className="py-12 border-t border-white/5 text-center text-gray-600 text-sm"> <p>© 2026 Apple Device Simulator. Built for performance enthusiasts.</p> </footer> <style>{` @keyframes pulse { 0%, 100% { opacity: 0.1; } 50% { opacity: 0.3; } } ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: #000; } ::-webkit-scrollbar-thumb { background: #222; border-radius: 10px; } ::-webkit-scrollbar-thumb:hover { background: #333; } `}</style> </div> ); } 
+import React, { useState, useMemo, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Routes, Route, Navigate, useNavigate, useParams, useLocation, Link } from 'react-router-dom';
+import { 
+  Laptop, 
+  Smartphone, 
+  Tablet, 
+  Monitor, 
+  HardDrive, 
+  Cpu, 
+  Settings, 
+  Play, 
+  ChevronRight, 
+  ChevronLeft,
+  Zap,
+  Battery,
+  Layers,
+  Palette,
+  CheckCircle2,
+  AlertTriangle,
+  Info,
+  Star
+} from 'lucide-react';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+import { 
+  DeviceCategory, 
+  OSFamily, 
+  OSVersion,
+  CPU, 
+  RAM, 
+  GPU, 
+  Storage, 
+  DeviceTemplate, 
+  UserDevice, 
+  PerformanceMetrics 
+} from './types';
+import { 
+  CPUS, 
+  RAM_OPTIONS, 
+  GPU_OPTIONS, 
+  STORAGE_OPTIONS, 
+  DEVICE_TEMPLATES,
+  OS_VERSIONS
+} from './data';
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+type View = 'selection' | 'customization' | 'test' | 'result';
+
+export default function App() {
+  const navigate = useNavigate();
+  const { slug } = useParams();
+  const location = useLocation();
+  
+  const [accentColor, setAccentColor] = useState('#00ff88');
+  const [device, setDevice] = useState<UserDevice | null>(null);
+
+  // Sync device state with URL slug if needed
+  useEffect(() => {
+    const pathParts = location.pathname.split('/');
+    const currentSlug = pathParts[2]; // /device/:slug or /test/:slug or /result/:slug
+    
+    if (currentSlug && (!device || device.template.slug !== currentSlug)) {
+      const template = DEVICE_TEMPLATES.find(t => t.slug === currentSlug);
+      if (template) {
+        // Initialize with defaults if navigating directly
+        const defaultCPU = CPUS.find(c => template.compatibleCPUTypes.includes(c.type)) || CPUS[0];
+        const defaultOS = OS_VERSIONS.find(v => v.family === template.defaultOSFamily) || OS_VERSIONS[0];
+        const defaultGPU = GPU_OPTIONS.find(g => 
+          template.compatibleGPUArchitectures.includes(g.architecture) && 
+          (g.id.includes(defaultCPU.id.split('-')[0]) || g.brand === 'Apple')
+        ) || GPU_OPTIONS.find(g => template.compatibleGPUArchitectures.includes(g.architecture)) || GPU_OPTIONS[0];
+        
+        setDevice({
+          template,
+          cpu: defaultCPU,
+          ram: RAM_OPTIONS[1], // 16GB
+          gpu: defaultGPU,
+          storage: STORAGE_OPTIONS[1], // 512GB
+          os: defaultOS,
+          screenSize: '14"',
+          accentColor: accentColor
+        });
+      }
+    }
+  }, [location.pathname, device, accentColor]);
+
+  // Performance calculation logic
+  const metrics = useMemo((): PerformanceMetrics | null => {
+    if (!device) return null;
+
+    const cpuPerf = device.cpu.performance;
+    const ramPerf = device.ram.performance;
+    const gpuPerf = device.gpu.performance;
+    const storagePerf = device.storage.speed;
+    const coreCount = device.cpu.cores;
+
+    // OS overhead calculation
+    const osYear = device.os.releaseYear;
+    const getHardwareYear = (id: string) => {
+      if (id.includes('m5')) return 2025;
+      if (id.includes('m4') || id.includes('a18')) return 2024;
+      if (id.includes('m3') || id.includes('a17')) return 2023;
+      if (id.includes('m2') || id.includes('a16')) return 2022;
+      if (id.includes('m1') || id.includes('a15') || id.includes('a14')) return 2021;
+      if (id.includes('a13')) return 2019;
+      if (id.includes('a12')) return 2018;
+      if (id.includes('a11')) return 2017;
+      return 2020;
+    };
+    const hardwareYear = getHardwareYear(device.cpu.id);
+    
+    // Calculate OS impact multiplier
+    // If OS is newer than hardware, performance drops (multiplier < 1)
+    // If OS is older than hardware, performance is slightly better or neutral (multiplier >= 1)
+    const yearDifference = osYear - hardwareYear;
+    let osMultiplier = 1.0;
+    
+    if (yearDifference > 0) {
+      // Newer OS on older hardware: 5% penalty per year difference
+      osMultiplier = Math.max(0.6, 1.0 - (yearDifference * 0.05));
+    } else if (yearDifference < 0) {
+      // Older OS on newer hardware: 2% boost per year difference (up to 10%)
+      osMultiplier = Math.min(1.1, 1.0 + (Math.abs(yearDifference) * 0.02));
+    }
+
+    // Apply OS multiplier to all metrics
+    const fps = Math.round(((cpuPerf * 0.3 + gpuPerf * 0.5 + ramPerf * 0.2) * (1 + coreCount / 100) * 1.2) * osMultiplier);
+    
+    // Load time increases (gets worse) if multiplier is low
+    const baseLoadTime = Math.max(0.5, Number((10 - (storagePerf / 10 + cpuPerf / 20)).toFixed(1)));
+    const loadTime = Number((baseLoadTime / osMultiplier).toFixed(1));
+    
+    // Battery life is affected by OS efficiency
+    const batteryLife = Math.round(((device.cpu.efficiency * 0.7 + device.ram.performance * 0.1) * 0.2) * osMultiplier);
+    
+    const graphicsQuality = Math.round((gpuPerf / 10) * osMultiplier);
+    
+    // Calculate base score out of 100 first, then convert to 10
+    const baseScore = (cpuPerf * 0.35) + (gpuPerf * 0.35) + (ramPerf * 0.20) + (storagePerf * 0.10);
+    
+    // Apply penalty and ensure it stays within 0-10 range with 1 decimal place
+    const rawTotalScore = (baseScore / 10) * osMultiplier;
+    const totalScore = Number(Math.max(1.0, Math.min(rawTotalScore, 10.0)).toFixed(1));
+
+    return {
+      fps: Math.max(10, Math.min(fps, 240)),
+      loadTime: Number(Math.max(0.1, loadTime).toFixed(1)),
+      batteryLife: Math.max(1, Math.min(batteryLife, 36)), // Increased max battery life
+      graphicsQuality: Math.max(1, Math.min(graphicsQuality, 10)),
+      totalScore
+    };
+  }, [device]);
+
+  // Dynamic Page Title
+  useEffect(() => {
+    let title = "JustGame 44";
+    if (location.pathname === '/home') {
+      title = "Select Device | JustGame 44";
+    } else if (location.pathname.startsWith('/device/')) {
+      title = `Build ${device?.template.name || 'Device'} | JustGame 44`;
+    } else if (location.pathname.startsWith('/test/')) {
+      title = `Testing ${device?.template.name || 'Device'} | JustGame 44`;
+    } else if (location.pathname.startsWith('/result/')) {
+      title = `Report: ${device?.template.name || 'Device'} | JustGame 44`;
+    }
+    document.title = title;
+  }, [location.pathname, device]);
+
+  useEffect(() => {
+    if (location.pathname.startsWith('/test/')) {
+      const timer = setTimeout(() => {
+        const currentSlug = location.pathname.split('/')[2];
+        navigate(`/result/${currentSlug}`);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [location.pathname, navigate]);
+
+  const handleSelectTemplate = (template: DeviceTemplate) => {
+    // Initialize with defaults
+    const defaultCPU = CPUS.find(c => template.compatibleCPUTypes.includes(c.type)) || CPUS[0];
+    const defaultOS = OS_VERSIONS.find(v => v.family === template.defaultOSFamily) || OS_VERSIONS[0];
+    const defaultGPU = GPU_OPTIONS.find(g => 
+      template.compatibleGPUArchitectures.includes(g.architecture) && 
+      (g.id.includes(defaultCPU.id.split('-')[0]) || g.brand === 'Apple')
+    ) || GPU_OPTIONS.find(g => template.compatibleGPUArchitectures.includes(g.architecture)) || GPU_OPTIONS[0];
+    
+    setDevice({
+      template,
+      cpu: defaultCPU,
+      ram: RAM_OPTIONS[1], // 16GB
+      gpu: defaultGPU,
+      storage: STORAGE_OPTIONS[1], // 512GB
+      os: defaultOS,
+      screenSize: '14"',
+      accentColor: accentColor
+    });
+    navigate(`/device/${template.slug}`);
+  };
+
+  const renderSelection = () => (
+    <div className="max-w-6xl mx-auto px-4 py-12">
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="text-center mb-12"
+      >
+        <h1 className="text-6xl font-black mb-4 text-rgb tracking-tighter">
+          JustGame 44
+        </h1>
+        <p className="text-zinc-400 text-lg max-w-2xl mx-auto text-rgb opacity-80">
+          Engineer your perfect Apple machine. From vintage iPods to next-gen Mac Studios, 
+          customize every component and benchmark your build.
+        </p>
+      </motion.div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {DEVICE_TEMPLATES.map((template, idx) => (
+          <motion.div
+            key={template.name}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: idx * 0.1 }}
+            whileHover={{ scale: 1.02, y: -5 }}
+            onClick={() => handleSelectTemplate(template)}
+            className="group relative bg-zinc-900/50 border border-white/10 rounded-3xl overflow-hidden cursor-pointer hover:border-white/30 transition-all hover-glow-rgb"
+            style={{ boxShadow: `0 0 20px ${accentColor}10` }}
+          >
+            <div className="aspect-video relative overflow-hidden">
+              <img 
+                src={template.image} 
+                alt={template.name}
+                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                referrerPolicy="no-referrer"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 to-transparent" />
+            </div>
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-2">
+                <h3 className="text-2xl font-bold text-white">{template.name}</h3>
+                <span className="px-3 py-1 bg-rgb text-white rounded-full text-xs font-medium glow-rgb">
+                  {template.category}
+                </span>
+              </div>
+              <p className="text-gray-400 text-sm mb-4">Starting from ${template.basePrice}</p>
+              <div className="flex items-center text-sm font-semibold text-rgb">
+                Customize <ChevronRight className="ml-1 w-4 h-4" />
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderCustomization = () => {
+    if (!device || !metrics) return null;
+
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Left Panel: Preview & Stats */}
+        <div className="lg:col-span-4 space-y-6">
+          <motion.div 
+            layoutId="device-preview"
+            className="bg-zinc-900/80 border border-white/10 rounded-3xl p-8 sticky top-8 glow-rgb"
+          >
+            <div className="relative aspect-square mb-8 rounded-2xl overflow-hidden bg-black flex items-center justify-center group active-glow-rgb">
+              <img 
+                src={device.template.image} 
+                alt="Preview" 
+                className="w-full h-full object-contain p-4 transition-transform duration-700 group-hover:scale-110"
+                referrerPolicy="no-referrer"
+              />
+              <div 
+                className="absolute inset-0 pointer-events-none opacity-30 mix-blend-screen"
+                style={{ background: `radial-gradient(circle at center, ${accentColor}60 0%, transparent 70%)` }}
+              />
+              {/* RGB Border Glow */}
+              <div className="absolute inset-0 border-2 border-white/5 rounded-2xl group-hover:border-white/20 transition-colors" />
+            </div>
+
+            {/* Component Visuals */}
+            <div className="grid grid-cols-4 gap-2 mb-6">
+              <div className="flex flex-col items-center p-2 rounded-xl bg-white/5 border border-white/5 hover-glow-rgb">
+                <Cpu className="w-4 h-4 mb-1 text-rgb" />
+                <span className="text-[8px] uppercase font-bold text-gray-500">CPU</span>
+              </div>
+              <div className="flex flex-col items-center p-2 rounded-xl bg-white/5 border border-white/5 hover-glow-rgb">
+                <Monitor className="w-4 h-4 mb-1 text-rgb" />
+                <span className="text-[8px] uppercase font-bold text-gray-500">GPU</span>
+              </div>
+              <div className="flex flex-col items-center p-2 rounded-xl bg-white/5 border border-white/5 hover-glow-rgb">
+                <Layers className="w-4 h-4 mb-1 text-rgb" />
+                <span className="text-[8px] uppercase font-bold text-gray-500">RAM</span>
+              </div>
+              <div className="flex flex-col items-center p-2 rounded-xl bg-white/5 border border-white/5 hover-glow-rgb">
+                <HardDrive className="w-4 h-4 mb-1 text-rgb" />
+                <span className="text-[8px] uppercase font-bold text-gray-500">SSD</span>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex justify-between items-end">
+                <div>
+                  <h2 className="text-3xl font-bold text-white text-rgb">{device.template.name}</h2>
+                  <p className="text-gray-400 text-rgb opacity-80">Custom Build</p>
+                </div>
+                <div className="text-right">
+                  <div className="text-4xl font-black text-rgb">
+                    {metrics.totalScore}
+                  </div>
+                  <div className="text-xs uppercase tracking-widest text-gray-500">Score</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4 pt-4 border-t border-white/5">
+                <div className="bg-white/5 p-3 rounded-2xl border border-white/5 hover-glow-rgb">
+                  <div className="flex items-center text-gray-400 text-[10px] uppercase tracking-wider mb-1">
+                    <Zap className="w-3 h-3 mr-1 text-rgb" /> FPS
+                  </div>
+                  <div className="text-lg font-bold text-white">{metrics.fps}</div>
+                </div>
+                <div className="bg-white/5 p-3 rounded-2xl border border-white/5 hover-glow-rgb">
+                  <div className="flex items-center text-gray-400 text-[10px] uppercase tracking-wider mb-1">
+                    <Battery className="w-3 h-3 mr-1 text-rgb" /> Battery
+                  </div>
+                  <div className="text-lg font-bold text-white">{metrics.batteryLife}h</div>
+                </div>
+                <div className="bg-white/5 p-3 rounded-2xl border border-white/5 active-glow-rgb">
+                  <div className="flex items-center text-gray-400 text-[10px] uppercase tracking-wider mb-1">
+                    <Star className="w-3 h-3 mr-1 text-rgb" /> Score
+                  </div>
+                  <div className="text-lg font-bold text-rgb">{metrics.totalScore}/10</div>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => navigate(`/test/${device.template.slug}`)}
+              className="w-full mt-8 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] bg-rgb text-white shadow-lg"
+            >
+              <Play className="w-5 h-5 fill-current" /> Run Simulation
+            </button>
+            
+            <button
+              onClick={() => navigate('/home')}
+              className="w-full mt-3 py-3 rounded-2xl font-medium text-gray-400 hover:text-white transition-colors hover:text-rgb"
+            >
+              Change Model
+            </button>
+          </motion.div>
+        </div>
+
+        {/* Right Panel: Options */}
+        <div className="lg:col-span-8 space-y-8">
+          <section>
+            <div className="flex items-center gap-2 mb-4 text-white font-semibold text-rgb">
+              <Cpu className="w-5 h-5" /> Processor (CPU)
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {CPUS.filter(c => device.template.name !== 'MacBook Neo' || device.template.compatibleCPUTypes.includes(c.type)).map(cpu => (
+                <button
+                  key={cpu.id}
+                  onClick={() => setDevice({ ...device, cpu })}
+                  className={cn(
+                    "p-4 rounded-2xl border text-left transition-all relative overflow-hidden group",
+                    device.cpu.id === cpu.id 
+                      ? "bg-white/10 active-glow-rgb" 
+                      : "bg-zinc-900/40 border-white/5 hover-glow-rgb"
+                  )}
+                >
+                  <div className="font-bold text-white">{cpu.name}</div>
+                  <div className="text-xs text-gray-500 mt-1">{cpu.type} Architecture</div>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <div className="flex items-center gap-2 mb-4 text-white font-semibold text-rgb">
+              <Layers className="w-5 h-5" /> Memory (RAM)
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              {RAM_OPTIONS.map(ram => (
+                <button
+                  key={ram.id}
+                  onClick={() => setDevice({ ...device, ram })}
+                  className={cn(
+                    "p-4 rounded-2xl border text-center transition-all relative overflow-hidden group",
+                    device.ram.id === ram.id 
+                      ? "bg-white/10 active-glow-rgb" 
+                      : "bg-zinc-900/40 border-white/5 hover-glow-rgb"
+                  )}
+                >
+                  <div className="font-bold text-white">{ram.size}GB</div>
+                  <div className="text-[10px] text-gray-500 uppercase">{ram.type}</div>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <div className="flex items-center gap-2 mb-4 text-white font-semibold text-rgb">
+              <Monitor className="w-5 h-5" /> Graphics (GPU)
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {GPU_OPTIONS.filter(g => device.template.name !== 'MacBook Neo' || device.template.compatibleGPUArchitectures.includes(g.architecture)).map(gpu => (
+                <button
+                  key={gpu.id}
+                  onClick={() => setDevice({ ...device, gpu })}
+                  className={cn(
+                    "p-4 rounded-2xl border text-left transition-all relative overflow-hidden group",
+                    device.gpu.id === gpu.id 
+                      ? "bg-white/10 active-glow-rgb" 
+                      : "bg-zinc-900/40 border-white/5 hover-glow-rgb"
+                  )}
+                >
+                  <div className="font-bold text-white">{gpu.name}</div>
+                  <div className="text-xs text-gray-500 mt-1">{gpu.type} GPU</div>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <div className="flex items-center gap-2 mb-4 text-white font-semibold text-rgb">
+              <HardDrive className="w-5 h-5" /> Storage
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {STORAGE_OPTIONS.map(storage => (
+                <button
+                  key={storage.id}
+                  onClick={() => setDevice({ ...device, storage })}
+                  className={cn(
+                    "p-4 rounded-2xl border text-center transition-all relative overflow-hidden group",
+                    device.storage.id === storage.id 
+                      ? "bg-white/10 active-glow-rgb" 
+                      : "bg-zinc-900/40 border-white/5 hover-glow-rgb"
+                  )}
+                >
+                  <div className="font-bold text-white">{storage.size >= 1024 ? `${storage.size / 1024}TB` : `${storage.size}GB`}</div>
+                  <div className="text-[10px] text-gray-500 uppercase">{storage.type}</div>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <div className="flex items-center gap-2 mb-4 text-white font-semibold text-rgb">
+              <Settings className="w-5 h-5" /> Operating System
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {OS_VERSIONS.filter(v => device.template.name !== 'MacBook Neo' || device.template.compatibleOSFamilies.includes(v.family)).map(os => (
+                <button
+                  key={os.id}
+                  onClick={() => setDevice({ ...device, os })}
+                  className={cn(
+                    "p-4 rounded-2xl border text-left transition-all relative overflow-hidden group",
+                    device.os.id === os.id 
+                      ? "bg-white/10 active-glow-rgb" 
+                      : "bg-zinc-900/40 border-white/5 hover-glow-rgb"
+                  )}
+                >
+                  <div className="font-bold text-white">{os.name}</div>
+                  <div className="text-[10px] text-gray-500 uppercase">Released {os.releaseYear}</div>
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
+      </div>
+    );
+  };
+
+  const renderTest = () => {
+    if (!device || !metrics) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center p-8 overflow-hidden">
+        <div className="absolute inset-0 opacity-20" style={{ 
+          backgroundImage: `radial-gradient(circle at center, ${accentColor} 0%, transparent 70%)`,
+          animation: 'pulse 4s infinite'
+        }} />
+        
+        <motion.div 
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="relative w-full max-w-4xl aspect-video bg-zinc-900 rounded-3xl border border-white/10 overflow-hidden shadow-2xl glow-rgb"
+        >
+          {/* Simulated Game/App View */}
+          <div className="absolute inset-0 flex flex-col">
+            <div className="p-4 border-b border-white/5 flex justify-between items-center bg-black/40 backdrop-blur-md">
+              <div className="flex items-center gap-3">
+                <div className="w-3 h-3 rounded-full bg-red-500" />
+                <div className="w-3 h-3 rounded-full bg-yellow-500" />
+                <div className="w-3 h-3 rounded-full bg-green-500" />
+                <span className="ml-4 text-sm font-mono text-gray-400">Benchmarking: {device.template.name}</span>
+              </div>
+              <div className="flex gap-6 text-xs font-mono">
+                <div className="flex flex-col items-end">
+                  <span className="text-gray-500 uppercase">FPS</span>
+                  <span className="text-white font-bold">{metrics.fps}</span>
+                </div>
+                <div className="flex flex-col items-end">
+                  <span className="text-gray-500 uppercase">Temp</span>
+                  <span className="text-white font-bold">42°C</span>
+                </div>
+                <div className="flex flex-col items-end">
+                  <span className="text-gray-500 uppercase">Usage</span>
+                  <span className="text-white font-bold">88%</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 relative flex items-center justify-center">
+              {/* Simulated visual test */}
+              <div className="text-center">
+                <motion.div 
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                  className="w-24 h-24 border-4 border-t-transparent rounded-full mb-6 mx-auto border-rgb"
+                />
+                <h3 className="text-2xl font-bold text-white mb-2 text-rgb">Rendering 3D Scene...</h3>
+                <p className="text-gray-500 font-mono">Loading assets: {metrics.loadTime}s estimated</p>
+              </div>
+
+              {/* Particle effects based on performance */}
+              {[...Array(20)].map((_, i) => (
+                <motion.div
+                  key={i}
+                  className="absolute w-1 h-1 rounded-full bg-white"
+                  animate={{
+                    x: [0, (Math.random() - 0.5) * 1000],
+                    y: [0, (Math.random() - 0.5) * 600],
+                    opacity: [1, 0],
+                    scale: [1, 0]
+                  }}
+                  transition={{
+                    duration: 2,
+                    repeat: Infinity,
+                    delay: Math.random() * 2,
+                    ease: "easeOut"
+                  }}
+                />
+              ))}
+            </div>
+
+            <div className="p-6 bg-black/60 border-t border-white/5">
+              <div className="flex justify-between items-center mb-4">
+                <span className="text-sm font-bold text-white">System Stability</span>
+                <span className="text-sm font-bold text-rgb">Optimal</span>
+              </div>
+              <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: '100%' }}
+                  transition={{ duration: 5 }}
+                  className="h-full bg-rgb"
+                />
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div 
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 1 }}
+          className="mt-12 flex gap-4"
+        >
+          <button
+            onClick={() => navigate(`/result/${device.template.slug}`)}
+            className="px-8 py-4 bg-rgb text-white font-bold rounded-2xl hover:scale-105 transition-transform glow-rgb"
+          >
+            View Final Report
+          </button>
+          <button
+            onClick={() => navigate(`/device/${device.template.slug}`)}
+            className="px-8 py-4 bg-zinc-800 text-white font-bold rounded-2xl hover:bg-zinc-700 transition-colors hover-glow-rgb"
+          >
+            Back to Build
+          </button>
+        </motion.div>
+      </div>
+    );
+  };
+
+  const renderResult = () => {
+    if (!device || !metrics) return null;
+
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-12">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-zinc-900/80 border border-white/10 rounded-[40px] p-12 text-center relative overflow-hidden glow-rgb"
+        >
+          <div className="absolute top-0 left-0 w-full h-2 bg-rgb" />
+          
+          <div className="mb-8 inline-flex items-center justify-center p-4 rounded-3xl bg-white/5 active-glow-rgb">
+            <CheckCircle2 className="w-12 h-12 text-rgb" />
+          </div>
+
+          <h1 className="text-4xl font-black text-white mb-2 text-rgb">Build Certified</h1>
+          <p className="text-gray-400 mb-12 text-rgb opacity-80">Your custom {device.template.name} is ready for production.</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+            <div className="p-6 rounded-3xl bg-white/5 border border-white/5 hover-glow-rgb">
+              <div className="text-5xl font-black mb-2 text-rgb">{metrics.totalScore}</div>
+              <div className="text-xs uppercase tracking-widest text-gray-500 text-rgb">Overall Rating</div>
+            </div>
+            <div className="p-6 rounded-3xl bg-white/5 border border-white/5 hover-glow-rgb">
+              <div className="text-5xl font-black mb-2 text-white text-rgb">{metrics.fps}</div>
+              <div className="text-xs uppercase tracking-widest text-gray-500 text-rgb">Peak FPS</div>
+            </div>
+            <div className="p-6 rounded-3xl bg-white/5 border border-white/5 hover-glow-rgb">
+              <div className="text-5xl font-black mb-2 text-white text-rgb">{metrics.batteryLife}h</div>
+              <div className="text-xs uppercase tracking-widest text-gray-500 text-rgb">Battery Life</div>
+            </div>
+          </div>
+
+          <div className="space-y-4 text-left mb-12">
+            <h3 className="text-white font-bold mb-4 flex items-center gap-2">
+              <Info className="w-4 h-4" /> AI Optimization Suggestions
+            </h3>
+            {Math.abs(device.cpu.performance - device.gpu.performance) > 25 && metrics.totalScore < 9.5 && (
+              <div className="p-4 rounded-2xl bg-yellow-500/10 border border-yellow-500/20 flex gap-3">
+                <AlertTriangle className="w-5 h-5 text-yellow-500 shrink-0" />
+                <p className="text-sm text-yellow-200/80">
+                  Hardware Bottleneck: The {device.cpu.performance > device.gpu.performance ? 'GPU' : 'CPU'} is significantly slower than the {device.cpu.performance > device.gpu.performance ? 'CPU' : 'GPU'}, which may limit peak performance in demanding tasks.
+                </p>
+              </div>
+            )}
+            {device.storage.type === 'HDD' && (
+              <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex gap-3">
+                <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />
+                <p className="text-sm text-red-200/80">
+                  HDD storage is a major bottleneck. Switching to an SSD will improve load times by up to 400%.
+                </p>
+              </div>
+            )}
+            <div className="p-4 rounded-2xl bg-green-500/10 border border-green-500/20 flex gap-3">
+              <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
+              <p className="text-sm text-green-200/80">
+                The {device.os.name} integration is perfectly optimized for your hardware choice.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <button
+              onClick={() => navigate('/home')}
+              className="px-12 py-4 rounded-2xl font-bold bg-rgb text-white hover:scale-105 transition-transform glow-rgb"
+            >
+              Build New Device
+            </button>
+            <button
+              onClick={() => window.print()}
+              className="px-12 py-4 rounded-2xl font-bold bg-zinc-800 text-white hover:bg-zinc-700 transition-colors hover-glow-rgb"
+            >
+              Export Specs
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-black text-zinc-300 font-sans selection:bg-white selection:text-black">
+      {/* Global Background Glow */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div 
+          className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full blur-[120px] opacity-20 bg-purple-600 animate-[pulse_8s_ease-in-out_infinite]"
+        />
+        <div 
+          className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full blur-[120px] opacity-10 bg-blue-600 animate-[pulse_10s_ease-in-out_infinite]"
+        />
+      </div>
+
+      <nav className="border-b border-white/5 bg-black/50 backdrop-blur-xl sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+          <Link to="/home" className="flex items-center gap-2 font-bold text-white text-xl text-rgb">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-rgb glow-rgb">
+              <Laptop className="w-5 h-5 text-white" />
+            </div>
+            JustGame 44
+          </Link>
+          <div className="flex items-center gap-4 text-[10px] font-mono uppercase tracking-[0.2em]">
+            <Link 
+              to="/home" 
+              className={cn(
+                "transition-colors", 
+                location.pathname === '/home' ? "text-white" : "text-zinc-600 hover:text-zinc-400"
+              )}
+            >
+              Selection
+            </Link>
+            {location.pathname !== '/home' && (
+              <>
+                <ChevronRight className="w-3 h-3 text-zinc-800" />
+                <span className={cn(
+                  "transition-colors", 
+                  location.pathname.startsWith('/device') ? "text-white" : "text-zinc-600"
+                )}>
+                  {device?.template.name || 'Build'}
+                </span>
+              </>
+            )}
+            {location.pathname.startsWith('/result') && (
+              <>
+                <ChevronRight className="w-3 h-3 text-zinc-800" />
+                <span className="text-white">Report</span>
+              </>
+            )}
+          </div>
+        </div>
+      </nav>
+
+      <main className="relative z-10">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <Routes location={location}>
+              <Route path="/home" element={renderSelection()} />
+              <Route path="/device/:slug" element={renderCustomization()} />
+              <Route path="/test/:slug" element={renderTest()} />
+              <Route path="/result/:slug" element={renderResult()} />
+              <Route path="/" element={<Navigate to="/home" replace />} />
+            </Routes>
+          </motion.div>
+        </AnimatePresence>
+      </main>
+
+      <footer className="py-12 border-t border-white/5 text-center text-gray-600 text-sm">
+        <p>© 2026 Apple Device Simulator. Built for performance enthusiasts.</p>
+      </footer>
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 0.1; }
+          50% { opacity: 0.3; }
+        }
+        ::-webkit-scrollbar {
+          width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+          background: #000;
+        }
+        ::-webkit-scrollbar-thumb {
+          background: #222;
+          border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+          background: #333;
+        }
+      `}</style>
+    </div>
+  );
+}

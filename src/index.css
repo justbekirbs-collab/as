@@ -4,3 +4,68 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
+
+@layer utilities {
+  .text-rgb {
+    background: linear-gradient(to right, #ff0000, #ff7f00, #ffff00, #00ff00, #00ffff, #0000ff, #8b00ff, #ff0000);
+    background-size: 200% auto;
+    color: transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+    animation: rgb-bg 3s linear infinite;
+  }
+
+  .bg-rgb {
+    background: linear-gradient(to right, #ff0000, #ff7f00, #ffff00, #00ff00, #00ffff, #0000ff, #8b00ff, #ff0000);
+    background-size: 200% auto;
+    animation: rgb-bg 3s linear infinite;
+  }
+  
+  .border-rgb {
+    position: relative;
+  }
+  
+  .border-rgb::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    border-radius: inherit;
+    background: linear-gradient(to right, #ff0000, #ff7f00, #ffff00, #00ff00, #00ffff, #0000ff, #8b00ff, #ff0000);
+    background-size: 200% auto;
+    animation: rgb-bg 3s linear infinite;
+    z-index: -1;
+  }
+
+  .glow-rgb {
+    animation: rgb-glow 3s linear infinite;
+  }
+  
+  .active-glow-rgb {
+    animation: rgb-glow-intense 3s linear infinite;
+    border-color: transparent !important;
+  }
+  
+  .hover-glow-rgb:hover {
+    animation: rgb-glow 3s linear infinite;
+    border-color: transparent;
+  }
+}
+
+@keyframes rgb-bg {
+  0% { background-position: 0% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes rgb-glow {
+  0% { box-shadow: 0 0 15px rgba(255, 0, 0, 0.5); }
+  33% { box-shadow: 0 0 15px rgba(0, 255, 0, 0.5); }
+  66% { box-shadow: 0 0 15px rgba(0, 0, 255, 0.5); }
+  100% { box-shadow: 0 0 15px rgba(255, 0, 0, 0.5); }
+}
+
+@keyframes rgb-glow-intense {
+  0% { box-shadow: 0 0 25px rgba(255, 0, 0, 0.8), inset 0 0 10px rgba(255, 0, 0, 0.3); }
+  33% { box-shadow: 0 0 25px rgba(0, 255, 0, 0.8), inset 0 0 10px rgba(0, 255, 0, 0.3); }
+  66% { box-shadow: 0 0 25px rgba(0, 0, 255, 0.8), inset 0 0 10px rgba(0, 0, 255, 0.3); }
+  100% { box-shadow: 0 0 25px rgba(255, 0, 0, 0.8), inset 0 0 10px rgba(255, 0, 0, 0.3); }
+}
