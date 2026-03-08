@@ -6,7 +6,7 @@ import './index.css';
 
 Object.defineProperty(window, 'YetAnotherGame', {
   get: function() {
-    window.location.href = 'https://justbekirsgame.justbekir.workers.dev';
+    window.location.href = 'https://github.com/justbekirbs-collab/justbekirsgame.git';
     return "Opening YetAnotherGame...";
   }
 });
