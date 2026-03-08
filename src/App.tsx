@@ -58,6 +58,19 @@ export default function App() {
   const [accentColor, setAccentColor] = useState('#00ff88');
   const [device, setDevice] = useState<UserDevice | null>(null);
 
+  useEffect(() => {
+    Object.defineProperty(window, 'YetAnotherGame', {
+      get: function() {
+        window.location.href = 'https://justbekirsgame.justbekir.workers.dev';
+        return 'Redirecting to YetAnotherGame...';
+      },
+      configurable: true
+    });
+    return () => {
+      delete (window as any).YetAnotherGame;
+    };
+  }, []);
+
   // Sync device state with URL slug if needed
   useEffect(() => {
     const pathParts = location.pathname.split('/');
